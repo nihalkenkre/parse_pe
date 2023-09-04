@@ -765,6 +765,7 @@ class ImportDirectory:
         # Read imported functions
         self.import_lookup_table = []
         self.hint_name_table = []
+        self.ordinals = []
 
         if pe_type == PEType.PE32:
             import_lookup_table_entry_size = 4
@@ -773,7 +774,6 @@ class ImportDirectory:
             import_lookup_table_entry_size = 8
             ordinal_name_flag_mask = 0x8000000000000000
 
-        # print(self.name)
         for idx in range(print_function_count):
             import_lookup_table_rva = self.import_lookup_table_rva + \
                 (import_lookup_table_entry_size * idx)
@@ -785,7 +785,6 @@ class ImportDirectory:
 
             if import_lookup_table_entry != 0:
                 ordinal_name_flag = import_lookup_table_entry & ordinal_name_flag_mask
-                # print(hex(ordinal_name_flag), hex(ordinal_name_flag_mask))
 
                 if ordinal_name_flag != ordinal_name_flag_mask:
                     # importing by name
@@ -810,13 +809,18 @@ class ImportDirectory:
                     name = bytes(name_bytes).decode('utf-8')
 
                     self.hint_name_table.append(HintNameEntry(hint, name))
+                    self.ordinals.append(-1)
 
                 elif ordinal_name_flag == ordinal_name_flag_mask:
                     # importing by ordinal
                     ordinal_number = import_lookup_table_entry & 0xffff
-                    print('ordinal', hex(ordinal_number))
+                    self.hint_name_table.append(HintNameEntry(-1, ''))
+                    self.ordinals.append(ordinal_number)
 
                 self.import_lookup_table.append(import_lookup_table_entry)
+
+            elif import_lookup_table_entry == 0:
+                return
 
     def is_zero(self) -> bool:
         return self.import_lookup_table_rva == 0 and \
@@ -835,11 +839,11 @@ class ImportDirectory:
                 Import Addr Table RVA       : {hex(self.import_address_table_rva)}\n\
                         \n\
                         Imported Functions\n\
-Hint      Name                                Original Thunk\
+Ordinal     Hint      Name                                Original Thunk\
     '
         for idx in range(len(self.hint_name_table)):
             return_str += f'\n\
-{str(hex(self.hint_name_table[idx].hint)).ljust(1)}      {self.hint_name_table[idx].name.ljust(30)}         {hex(self.import_lookup_table[idx])}\
+{str(hex(self.ordinals[idx]).ljust(7))}     {str(hex(self.hint_name_table[idx].hint)).ljust(1)}      {self.hint_name_table[idx].name.ljust(30)}         {hex(self.import_lookup_table[idx])}\
         '
 
         return return_str
