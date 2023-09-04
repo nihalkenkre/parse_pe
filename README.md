@@ -1,6 +1,7 @@
 # parse_pe
 A Python script to print out different parts of a Portable Executable file, to the console
 
+```
 positional arguments:
   filename
 
@@ -20,3 +21,4 @@ options:
                         Print the export address table
   --imported-functions IMPORTED_FUNCTIONS
                         Print the import address table
+```
