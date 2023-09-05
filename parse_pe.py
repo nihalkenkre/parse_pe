@@ -1,14 +1,20 @@
+import os.path
 import argparse
 from enum import Enum
 
 DOS_HEADER_SIZE = 64
 NT_HEADER_SIGNATURE_SIZE = 4
-NT_HEADER_FILE_HEADER_SIZE = 32
+NT_HEADER_FILE_HEADER_SIZE = 20
 
 SECTION_HEADER_SIZE = 40
 
 EXPORT_DIRECTORY_SIZE = 40
+EXPORT_FUNCTION_RVA_SIZE = 4
+EXPORT_ORDINAL_SIZE = 2
+EXPORT_NAME_RVA_SIZE = 4
+
 IMPORT_DIRECTORY_SIZE = 20
+IMPORT_DIRECTORY_HINT_SIZE = 2
 
 DATA_DIRS_SIZE = 120
 SECTION_HEADER_SIZE = 40
@@ -22,6 +28,20 @@ def rva_to_offset(rva, section_hdrs):
             return rva - section_hdr.virtual_addr + section_hdr.raw_data_ptr
 
     return -1
+
+
+def get_string_from_file(f=None) -> str:
+    if f is None:
+        return
+
+    string_char = int.from_bytes(f.read(1), 'little')
+    string_bytes = []
+
+    while string_char != 0:
+        string_bytes.append(string_char)
+        string_char = int.from_bytes(f.read(1), 'little')
+
+    return bytes(string_bytes).decode('utf-8')
 
 
 class PEType(Enum):
@@ -525,70 +545,73 @@ class ExportDirectory:
         self.address_of_name_ordinals = int.from_bytes(
             export_directory_bytes[36:40], 'little')
 
+        # We will create lists to store the features of the exported functions
         self.offsets = []
         self.function_rvas = []
         self.forwarders = []
 
-        # Actual range is self.number_of_functions
+        # Walk through the function rvas and check if the funtion definitions are part of the file or forwarded to another dll
         for idx in range(print_function_count):
-            function_rva_offset = rva_to_offset(
-                self.address_of_functions + (idx * 4), section_headers)
+
+            # Get the rva of the rva for the current iteration
+            function_rva = self.address_of_functions + \
+                (idx * EXPORT_FUNCTION_RVA_SIZE)
+            
+            # Get the offset for the rva in the file
+            function_rva_offset = rva_to_offset(function_rva, section_headers)
 
             self.offsets.append(function_rva_offset)
+            
+            # Read the function rva from the file
             f.seek(function_rva_offset)
-            self.function_rvas.append(int.from_bytes(f.read(4), 'little'))
+            self.function_rvas.append(int.from_bytes(
+                f.read(EXPORT_FUNCTION_RVA_SIZE), 'little'))
 
             function_offset = rva_to_offset(
                 self.function_rvas[idx], section_headers)
 
+            # if the function offset is within the export directory then it points to a string of the form DLL.FunctionName
+            # to which this function is forwarded
             if function_offset > rva_to_offset(export_directory_va_size.va, section_headers) and\
                     function_offset < rva_to_offset(export_directory_va_size.va + export_directory_va_size.size, section_headers):
                 f.seek(function_offset)
 
-                name_char = int.from_bytes(f.read(1))
-                name_bytes = []
-
-                while name_char != 0:
-                    name_bytes .append(name_char)
-                    name_char = int.from_bytes(f.read(1))
-
-                self.forwarders.append(bytes(name_bytes).decode('utf-8'))
+                forwarder_name = get_string_from_file(f)
+                self.forwarders.append(forwarder_name)
             else:
+                # if the function offset is outside the export directory then it points to the function definition
+                # append a dummy value to the fowarder list for display completeness
                 self.forwarders.append('')
 
         self.ordinals = []
 
-        for idx in range(print_function_count):  # Actual range is self.number_of_names
+        for idx in range(print_function_count):
             name_ordinal_offset = rva_to_offset(
-                self.address_of_name_ordinals + (idx * 2), section_headers)
+                self.address_of_name_ordinals + (idx * EXPORT_ORDINAL_SIZE), section_headers)
 
             f.seek(name_ordinal_offset)
             self.ordinals.append(self.ordinal_base +
-                                 int.from_bytes(f.read(2), 'little'))
+                                 int.from_bytes(f.read(EXPORT_ORDINAL_SIZE), 'little'))
 
         self.name_rvas = []
 
-        for idx in range(print_function_count):  # Actual range is self.number_of_names
+        for idx in range(print_function_count):
             name_rva_offset = rva_to_offset(
-                self.address_of_names + (idx * 4), section_headers)
+                self.address_of_names + (idx * EXPORT_NAME_RVA_SIZE), section_headers)
 
             f.seek(name_rva_offset)
-            self.name_rvas.append(int.from_bytes(f.read(4), 'little'))
+            self.name_rvas.append(int.from_bytes(
+                f.read(EXPORT_NAME_RVA_SIZE), 'little'))
 
         self.names = []
 
-        for idx in range(print_function_count):  # Actual range is self.number_of_names
+        for idx in range(print_function_count):
             name_offset = rva_to_offset(self.name_rvas[idx], section_headers)
             f.seek(name_offset)
 
-            name_char = int.from_bytes(f.read(1))
-            name_bytes = []
+            name = get_string_from_file(f)
 
-            while name_char != 0:
-                name_bytes.append(name_char)
-                name_char = int.from_bytes(f.read(1))
-
-            self.names.append(bytes(name_bytes).decode('utf-8'))
+            self.names.append(name)
 
     def __str__(self) -> str:
         return_str = f'\n\
@@ -630,20 +653,13 @@ class ImportDirectory:
         self.import_address_table_rva = int.from_bytes(
             import_directory_bytes[16:20], 'little')
 
+        # Check if the object members are zero. This also signifies the end of the import directory list
         if self.is_zero():
             return
 
         name_offset = rva_to_offset(self.name_rva, section_headers)
         f.seek(name_offset)
-
-        name_bytes = []
-        name_char = int.from_bytes(f.read(1))
-
-        while name_char != 0:
-            name_bytes.append(name_char)
-            name_char = int.from_bytes(f.read(1))
-
-        self.name = bytes(name_bytes).decode('utf-8')
+        self.name = get_string_from_file(f)
 
         # Read imported functions
         self.import_lookup_table = []
@@ -658,19 +674,30 @@ class ImportDirectory:
             ordinal_name_flag_mask = 0x8000000000000000
 
         for idx in range(print_function_count):
+            # Get the import lookup table RVA for the current iteration
             import_lookup_table_rva = self.import_lookup_table_rva + \
                 (import_lookup_table_entry_size * idx)
+
+            # Get the offset in the file for the above rva
             import_lookup_table_offset = rva_to_offset(
                 import_lookup_table_rva, section_headers)
+
+            # Get the import lookup table entry from the file
             f.seek(import_lookup_table_offset)
             import_lookup_table_entry = int.from_bytes(
                 f.read(import_lookup_table_entry_size), 'little')
 
+            # Check if the import lookup table entry is zero, which signifies the end of the table
             if import_lookup_table_entry != 0:
+                # This entry can either be a hint-name value or a ordinal value
+                # Bit no. 31/63 of the entry for 32/64 bit PE files is 1 if the entry is an ordinal and 0 if the entry is a hint name entry
+                # This is checkd by masked the entry with the mask and checking the result
                 ordinal_name_flag = import_lookup_table_entry & ordinal_name_flag_mask
 
+                # This check is essentially to check if the bit no 31/63 is 0
                 if ordinal_name_flag != ordinal_name_flag_mask:
                     # importing by name
+                    # The hint name table entry rva is calculated as follows
                     hint_name_table_entry_rva = import_lookup_table_entry & 0x7fffffff
                     hint_name_table_entry_offset = rva_to_offset(
                         hint_name_table_entry_rva, section_headers)
@@ -680,28 +707,30 @@ class ImportDirectory:
 
                     f.seek(hint_name_table_entry_offset)
 
-                    hint = int.from_bytes(f.read(2), 'little')
+                    # The first two bytes are the hint followed by the name of the function
+                    hint = int.from_bytes(
+                        f.read(IMPORT_DIRECTORY_HINT_SIZE), 'little')
+                    name = get_string_from_file(f)
 
-                    name_char = int.from_bytes(f.read(1), 'little')
-                    name_bytes = []
-
-                    while name_char != 0:
-                        name_bytes.append(name_char)
-                        name_char = int.from_bytes(f.read(1), 'little')
-
-                    name = bytes(name_bytes).decode('utf-8')
-
+                    # Initialize a HintNameEntry object and append to the list
                     self.hint_name_table.append(HintNameEntry(hint, name))
+
+                    # Add a dummy -ve value to the ordinal list for display completeness
                     self.ordinals.append(-1)
 
+                # This check is essentially to check if the bit no 31/63 is 1
                 elif ordinal_name_flag == ordinal_name_flag_mask:
                     # importing by ordinal
+                    # Get the ordinal number as follows
                     ordinal_number = import_lookup_table_entry & 0xffff
+
+                    # Add a dummy -ve value to the hint name table for display completeness
                     self.hint_name_table.append(HintNameEntry(-1, ''))
                     self.ordinals.append(ordinal_number)
 
                 self.import_lookup_table.append(import_lookup_table_entry)
 
+            # Reached the end of the import lookup table
             elif import_lookup_table_entry == 0:
                 return
 
@@ -745,6 +774,10 @@ def main(args):
         print('Nothing to print. Exiting... Pass -h flag for help')
         return
 
+    if not os.path.exists(args.filename):
+        print(f'ERR: Input file {args.filename} not found')
+        return
+
     with open(args.filename, 'rb') as f:
         # DOS Header is the first block of data in the file
         dos_header = DOSHeader(f.read(DOS_HEADER_SIZE))
@@ -760,12 +793,14 @@ def main(args):
             print(dos_stub)
 
         # NT headers follow the DOS Stub
-        nt_header_signature = NTHeaderSignature(f.read(4))
+        nt_header_signature = NTHeaderSignature(
+            f.read(NT_HEADER_SIGNATURE_SIZE))
 
         if args.nt_headers_signature:
             print(nt_header_signature)
 
-        nt_headers_file_header = NTHeaderFileHeader(f.read(20))
+        nt_headers_file_header = NTHeaderFileHeader(
+            f.read(NT_HEADER_FILE_HEADER_SIZE))
 
         if args.nt_headers_file_header:
             print(nt_headers_file_header)
@@ -789,42 +824,58 @@ def main(args):
                 print(section_header)
 
         # Exported Functions
+
+        # Check if the --exported-functions flags is passed on the command line
         if args.exported_functions is not None:
+
+            # Get the offset of the export directory in the file
             export_directiory_offset = rva_to_offset(
                 nt_headers_optional_header.export_directory.va, section_headers)
 
             if export_directiory_offset == -1:
                 return
 
+            # Initialize a ExportDirectory object by passing the bytes read from the file to the class 'constructor'
             f.seek(export_directiory_offset)
             export_directory = ExportDirectory(
                 f.read(EXPORT_DIRECTORY_SIZE), section_headers, f, nt_headers_optional_header.export_directory, int(args.exported_functions))
 
             print(export_directory)
 
+        # Store the bitness of the PE File. This is required since the Import Lookup Table has 32 bit entries for 32 bit PE files and 64 bit entries for 64 bit PE files
         if nt_headers_file_header.machine == 0x8664:
             pe_type = PEType.PE64
         elif nt_headers_file_header.machine == 0x14c:
             pe_type = PEType.PE32
 
         # Imported Functions
+        # List to hold the import directories.
         import_directories = []
+
+        # Check if the --imported-functions flags is passed on the command line
         if args.imported_functions is not None:
+
+            # Get the offset of the import directory in the file
             first_import_directory_offset = rva_to_offset(
                 nt_headers_optional_header.import_directory.va, section_headers)
 
             if first_import_directory_offset == -1:
                 return
 
+            # Initialize a ImportDirectory object by passing the bytes read from the file to class 'constructor'
             f.seek(first_import_directory_offset)
             import_directory = ImportDirectory(
                 f.read(IMPORT_DIRECTORY_SIZE), f, section_headers, pe_type, int(args.imported_functions))
 
+            # The import directory entry is zero to signify the end of the array, so we check if all the object members are zero
+            # if not zero continue walking the list
             while not import_directory.is_zero():
                 import_directories.append(import_directory)
 
                 f.seek(first_import_directory_offset +
                        (len(import_directories) * IMPORT_DIRECTORY_SIZE))
+
+                # Initialize a ImportDirectory object by passing the bytes read from the file to class 'constructor'
                 import_directory = ImportDirectory(
                     f.read(IMPORT_DIRECTORY_SIZE), f, section_headers, pe_type, int(args.imported_functions))
 
@@ -853,9 +904,9 @@ if __name__ == '__main__':
     parser.add_argument('--section-headers', action='store_true',
                         help='Print the section headers')
     parser.add_argument('--exported-functions',
-                        help='Print the exported functions. Count limited to EXPORTED_FUNCTIONS')
+                        help='Print the exported functions. Count limited to EXPORTED_FUNCTIONS. Negative values of Hint and Ordinal means that value is NULL')
     parser.add_argument('--imported-functions',
-                        help='Print the imported functions. Count limited to IMPORTED_FUNCTIONS')
+                        help='Print the imported functions. Count limited to IMPORTED_FUNCTIONS. Negative values of Hint and Ordinal means that value is NULL')
     args = parser.parse_args()
 
     main(args)
