@@ -85,7 +85,6 @@ typedef enum pe_type
 
 LONG rva_to_offset(LONG rva, IMAGE_SECTION_HEADER *SectionHeaders, WORD SectionHeadersCount)
 {
-    printf("rva %ld\n", rva);
     for (WORD id = 0; id < SectionHeadersCount; ++id)
     {
         LONG x = SectionHeaders[id].VirtualAddress + SectionHeaders[id].SizeOfRawData;
@@ -110,6 +109,12 @@ CHAR *get_string_from_file(HANDLE hFile)
     }
 
     CHAR *sName = VirtualAlloc(NULL, MAX_FUNCTION_NAME_LEN, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+    if (sName == NULL)
+    {
+        printf("ERR: VirtualAlloc failed with %d\n", GetLastError());
+        return NULL;
+    }
 
     for (UINT c = 0; c < MAX_FUNCTION_NAME_LEN; ++c)
     {
@@ -552,6 +557,7 @@ MY_EXPORT_DIRECTORY parse_exported_functions(HANDLE hFile, IMAGE_DATA_DIRECTORY 
     }
 
     MY_EXPORT_DIRECTORY MyExportDirectory;
+    MyExportDirectory.iExportedFunctionsCount = exported_function_count;
 
     if (!ReadFile(hFile, &MyExportDirectory.ExportDirectory, sizeof(MyExportDirectory.ExportDirectory), NULL, NULL))
     {
@@ -560,8 +566,6 @@ MY_EXPORT_DIRECTORY parse_exported_functions(HANDLE hFile, IMAGE_DATA_DIRECTORY 
 
         goto shutdown;
     }
-
-    printf("%d\n", MyExportDirectory.ExportDirectory.Name);
 
     MyExportDirectory.Offsets = (DWORD *)VirtualAlloc(NULL, sizeof(DWORD) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (MyExportDirectory.Offsets == NULL)
@@ -583,6 +587,35 @@ MY_EXPORT_DIRECTORY parse_exported_functions(HANDLE hFile, IMAGE_DATA_DIRECTORY 
 
     MyExportDirectory.Forwarders = (CHAR **)VirtualAlloc(NULL, sizeof(CHAR *) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (MyExportDirectory.Forwarders == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    MyExportDirectory.Ordinals = (WORD *)VirtualAlloc(NULL, sizeof(WORD) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+    if (MyExportDirectory.Ordinals == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    MyExportDirectory.NameRVAs = (DWORD *)VirtualAlloc(NULL, sizeof(DWORD) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+    if (MyExportDirectory.NameRVAs == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+    MyExportDirectory.Names = (CHAR **)VirtualAlloc(NULL, sizeof(CHAR *) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+    if (MyExportDirectory.Names == NULL)
     {
         iRetVal = GetLastError();
         printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
@@ -632,19 +665,10 @@ MY_EXPORT_DIRECTORY parse_exported_functions(HANDLE hFile, IMAGE_DATA_DIRECTORY 
         }
         else
         {
-            MyExportDirectory.Forwarders[f] = "No Forwarder";
+            MyExportDirectory.Forwarders[f] = "";
         }
 
-        MyExportDirectory.Ordinals = (WORD *)VirtualAlloc(NULL, sizeof(WORD) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-        if (MyExportDirectory.Ordinals == NULL)
-        {
-            iRetVal = GetLastError();
-            printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
-
-            goto shutdown;
-        }
-
-        LONG lOrdinalsRVAOffset = rva_to_offset(MyExportDirectory.ExportDirectory.AddressOfNameOrdinals, SectionHeaders, SectionHeadersCount);
+        LONG lOrdinalsRVAOffset = rva_to_offset(MyExportDirectory.ExportDirectory.AddressOfNameOrdinals + (f * EXPORT_ORDINAL_SIZE), SectionHeaders, SectionHeadersCount);
 
         dwFilePtr = SetFilePointer(hFile, lOrdinalsRVAOffset, NULL, FILE_BEGIN);
         if (dwFilePtr == INVALID_SET_FILE_POINTER)
@@ -655,23 +679,14 @@ MY_EXPORT_DIRECTORY parse_exported_functions(HANDLE hFile, IMAGE_DATA_DIRECTORY 
             goto shutdown;
         }
 
-        if (!ReadFile(hFile, MyExportDirectory.Ordinals + f, EXPORT_ORDINAL_SIZE, NULL, NULL))
+        if (!ReadFile(hFile, &MyExportDirectory.Ordinals[f], EXPORT_ORDINAL_SIZE, NULL, NULL))
         {
             iRetVal = GetLastError();
             printf("ERR: ReadFile failed with %d\n", iRetVal);
 
             goto shutdown;
         }
-
-        MyExportDirectory.NameRVAs = (DWORD *)VirtualAlloc(NULL, sizeof(DWORD) * exported_function_count, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-
-        if (MyExportDirectory.NameRVAs == NULL)
-        {
-            iRetVal = GetLastError();
-            printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
-
-            goto shutdown;
-        }
+        MyExportDirectory.Ordinals[f] += MyExportDirectory.ExportDirectory.Base;
 
         LONG lNameRVAOffset = rva_to_offset(MyExportDirectory.ExportDirectory.AddressOfNames + (f * EXPORT_NAME_RVA_SIZE), SectionHeaders, SectionHeadersCount);
 
@@ -684,13 +699,29 @@ MY_EXPORT_DIRECTORY parse_exported_functions(HANDLE hFile, IMAGE_DATA_DIRECTORY 
             goto shutdown;
         }
 
-        if (!ReadFile(hFile, MyExportDirectory.NameRVAs + f, EXPORT_NAME_RVA_SIZE, NULL, NULL))
+        if (!ReadFile(hFile, &MyExportDirectory.NameRVAs[f], EXPORT_NAME_RVA_SIZE, NULL, NULL))
         {
             iRetVal = GetLastError();
             printf("ERR: ReadFile failed with %d\n", iRetVal);
 
             goto shutdown;
         }
+
+        LONG lNameOffset = rva_to_offset(MyExportDirectory.NameRVAs[f], SectionHeaders, SectionHeadersCount);
+
+        dwFilePtr = SetFilePointer(hFile, lNameOffset, NULL, FILE_BEGIN);
+        if (dwFilePtr == INVALID_SET_FILE_POINTER)
+        {
+            iRetVal = GetLastError();
+            printf("ERR: SetFilePointer failed at NameOffset with %d, Distance: %d\n", iRetVal, lNameOffset);
+
+            goto shutdown;
+        }
+
+        CHAR *sName = get_string_from_file(hFile);
+        *(MyExportDirectory.Names + f) = sName;
+
+        printf("%s\n", *(MyExportDirectory.Names + f));
     }
 
 shutdown:
@@ -722,6 +753,14 @@ void PrintExportDirectory(MY_EXPORT_DIRECTORY MyExportDirectory)
            MyExportDirectory.ExportDirectory.NumberOfFunctions, MyExportDirectory.ExportDirectory.NumberOfNames,
            MyExportDirectory.ExportDirectory.AddressOfFunctions, MyExportDirectory.ExportDirectory.AddressOfNames,
            MyExportDirectory.ExportDirectory.AddressOfNameOrdinals);
+
+    printf("\n\n");
+    printf("Offset     Ordinal    Function RVA        Name RVA                  Name                                Forwarder\n");
+
+    for (int f = 0; f < MyExportDirectory.iExportedFunctionsCount; ++f)
+    {
+        printf("0x%x     0x%02x         0x%05x          0x%x           %30s          %s\n", MyExportDirectory.Offsets[f], MyExportDirectory.Ordinals[f], MyExportDirectory.FunctionRVAs[f], MyExportDirectory.NameRVAs[f], *(MyExportDirectory.Names + f), *(MyExportDirectory.Forwarders + f));
+    }
 }
 
 int parse_imported_functions(HANDLE hFile, int imported_function_count)
