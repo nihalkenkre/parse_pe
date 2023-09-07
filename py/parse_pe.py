@@ -83,12 +83,30 @@ class DOSHeader:
             dos_header_bytes[24:26], 'little')
         self.e_ovno = int.from_bytes(
             dos_header_bytes[26:28], 'little')
-        self.e_res = int.from_bytes(dos_header_bytes[28:36])
+
+        self.e_res = []
+        self.e_res.append(int.from_bytes(dos_header_bytes[28:30]))
+        self.e_res.append(int.from_bytes(dos_header_bytes[30:32]))
+        self.e_res.append(int.from_bytes(dos_header_bytes[32:34]))
+        self.e_res.append(int.from_bytes(dos_header_bytes[34:36]))
+
         self.e_oemid = int.from_bytes(
             dos_header_bytes[36:38], 'little')
         self.e_oeminfo = int.from_bytes(
             dos_header_bytes[38:40], 'little')
-        self.e_res2 = int.from_bytes(dos_header_bytes[40:60])
+
+        self.e_res2 = []
+        self.e_res2.append(int.from_bytes(dos_header_bytes[40:42]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[42:44]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[44:46]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[46:48]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[48:50]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[50:52]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[52:54]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[54:56]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[56:58]))
+        self.e_res2.append(int.from_bytes(dos_header_bytes[58:60]))
+
         self.e_lfanew = int.from_bytes(
             dos_header_bytes[60:64], 'little')
 
@@ -117,10 +135,10 @@ class DOSHeader:
                 Initial Relative CS Value   : {hex(self.e_cs)}\n\
                 File Addr of Reloc Table    : {hex(self.e_lfarlc)}\n\
                 Overlay Number              : {hex(self.e_ovno)}\n\
-                Reserved Words              : {hex(self.e_res)}\n\
+                Reserved Words              : {self.e_res}\n\
                 OEM Identifier              : {hex(self.e_oemid)}\n\
                 OEM Information             : {hex(self.e_oeminfo)}\n\
-                Reserved Words              : {hex(self.e_res2)}\n\
+                Reserved Words              : {self.e_res2}\n\
                 File Addr New EXE Header    : {hex(self.e_lfanew)}\n'
 
 
@@ -676,17 +694,19 @@ class ImportDirectory:
 
         for idx in range(print_function_count):
             # Get the import lookup table RVA for the current iteration / Original Thunk
-            import_lookup_table_rva = self.import_lookup_table_rva + \
+            import_lookup_table_entry_rva = self.import_lookup_table_rva + \
                 (import_lookup_table_entry_size * idx)
 
             # Get the offset in the file for the above rva
-            import_lookup_table_offset = rva_to_offset(
-                import_lookup_table_rva, section_headers)
+            import_lookup_table_entry_offset = rva_to_offset(
+                import_lookup_table_entry_rva, section_headers)
 
             # Get the import lookup table entry from the file
-            f.seek(import_lookup_table_offset)
+            f.seek(import_lookup_table_entry_offset)
             import_lookup_table_entry = int.from_bytes(
                 f.read(import_lookup_table_entry_size), 'little')
+
+            self.import_lookup_table.append(import_lookup_table_entry)
 
             # Check if the import lookup table entry is zero, which signifies the end of the table
             if import_lookup_table_entry != 0:
@@ -728,8 +748,6 @@ class ImportDirectory:
                     # Add a dummy -ve value to the hint name table for display completeness
                     self.hint_name_table.append(HintNameEntry(-1, ''))
                     self.ordinals.append(ordinal_number)
-
-                self.import_lookup_table.append(import_lookup_table_entry)
 
                 # Import Address Table / First thunk
                 # Get import address Table RVA for the current iteration
