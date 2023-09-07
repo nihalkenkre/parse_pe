@@ -89,11 +89,22 @@ typedef struct my_import_directory
 
     CHAR *sName;
 
-    DWORD *ImportLookupTable;
+    DWORD64 *ImportLookupTable;
+    HINT_NAME_TABLE_ENTRY *HintNameTable;
+    SHORT *Ordinals;
+    DWORD *ImportAddressTable;
 
     INT iImportedFunctionCount;
     INT iRetVal;
 } MY_IMPORT_DIRECTORY;
+
+typedef struct my_import_directories
+{
+    MY_IMPORT_DIRECTORY *MyImportDirectories;
+    UINT32 ImportDirectoriesCount;
+
+    INT iRetVal;
+} MY_IMPORT_DIRECTORIES;
 
 typedef enum pe_type
 {
@@ -155,7 +166,7 @@ CHAR *GetStringFromFile(HANDLE hFile)
     return sName;
 }
 
-BOOL IsImportDirectoryZero(IMAGE_IMPORT_DESCRIPTOR ImportDirectory)
+BOOL IsImportDescriptorZero(IMAGE_IMPORT_DESCRIPTOR ImportDirectory)
 {
     return ImportDirectory.OriginalFirstThunk == 0 &&
            ImportDirectory.TimeDateStamp == 0 &&
@@ -790,20 +801,9 @@ void PrintExportDirectory(MY_EXPORT_DIRECTORY MyExportDirectory)
     }
 }
 
-MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, PEType ePEType, IMAGE_DATA_DIRECTORY ImageImportDirectory, INT iImportedFunctionCount, IMAGE_SECTION_HEADER *SectionHeaders, WORD SectionHeaderCount)
+MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, LONG lImportDirectoryOffset, PEType ePEType, INT iImportedFunctionCount, IMAGE_SECTION_HEADER *SectionHeaders, WORD SectionHeaderCount)
 {
     INT iRetVal = 0;
-
-    LONG lImportDirectoryOffset = RVAToOffset(ImageImportDirectory.VirtualAddress, SectionHeaders, SectionHeaderCount);
-
-    DWORD dwFilePtr = SetFilePointer(hFile, lImportDirectoryOffset, NULL, FILE_BEGIN);
-    if (dwFilePtr == INVALID_SET_FILE_POINTER)
-    {
-        iRetVal = GetLastError();
-        printf("ERR: SetFilePointer failed with %d\n", iRetVal);
-
-        goto shutdown;
-    }
 
     MY_IMPORT_DIRECTORY MyImportDirectory = {
         .iImportedFunctionCount = iImportedFunctionCount,
@@ -817,18 +817,18 @@ MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, PEType ePEType, IMAGE_DAT
         goto shutdown;
     }
 
-    if (IsImportDirectoryZero(MyImportDirectory.ImportDirectory))
+    if (IsImportDescriptorZero(MyImportDirectory.ImportDirectory))
     {
         goto shutdown;
     }
 
     LONG lNameOffset = RVAToOffset(MyImportDirectory.ImportDirectory.Name, SectionHeaders, SectionHeaderCount);
 
-    dwFilePtr = SetFilePointer(hFile, lNameOffset, NULL, FILE_BEGIN);
+    DWORD dwFilePtr = SetFilePointer(hFile, lNameOffset, NULL, FILE_BEGIN);
     if (dwFilePtr == INVALID_SET_FILE_POINTER)
     {
         iRetVal = GetLastError();
-        printf("ERR: SetFilePointer failed with %d\n", iRetVal);
+        printf("ERR: SetFilePointer failed at NameOffset with %d\n", iRetVal);
 
         goto shutdown;
     }
@@ -849,8 +849,35 @@ MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, PEType ePEType, IMAGE_DAT
         dwOrdinalNameFlagMask = 0x8000000000000000;
     }
 
-    MyImportDirectory.ImportLookupTable = (DWORD *)VirtualAlloc(NULL, ImportLookupTableEntrySize * iImportedFunctionCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    MyImportDirectory.ImportLookupTable = (DWORD64 *)VirtualAlloc(NULL, ImportLookupTableEntrySize * iImportedFunctionCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     if (MyImportDirectory.ImportLookupTable == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    MyImportDirectory.HintNameTable = (HINT_NAME_TABLE_ENTRY *)VirtualAlloc(NULL, sizeof(HINT_NAME_TABLE_ENTRY) * iImportedFunctionCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (MyImportDirectory.HintNameTable == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    MyImportDirectory.Ordinals = (SHORT *)VirtualAlloc(NULL, sizeof(SHORT) * iImportedFunctionCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (MyImportDirectory.Ordinals == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    MyImportDirectory.ImportAddressTable = (DWORD *)VirtualAlloc(NULL, sizeof(DWORD) * iImportedFunctionCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (MyImportDirectory.ImportAddressTable == NULL)
     {
         iRetVal = GetLastError();
         printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
@@ -860,14 +887,14 @@ MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, PEType ePEType, IMAGE_DAT
 
     for (INT f = 0; f < iImportedFunctionCount; ++f)
     {
-        DWORD lImportLookupTableEntryRVA = MyImportDirectory.ImportDirectory.OriginalFirstThunk + (ImportLookupTableEntrySize * f);
-        LONG lImportLookupTableEntryOffset = RVAToOffset(lImportLookupTableEntryRVA, SectionHeaders, SectionHeaderCount);
+        DWORD dwImportLookupTableEntryRVA = MyImportDirectory.ImportDirectory.OriginalFirstThunk + (ImportLookupTableEntrySize * f);
+        LONG lImportLookupTableEntryOffset = RVAToOffset(dwImportLookupTableEntryRVA, SectionHeaders, SectionHeaderCount);
 
         dwFilePtr = SetFilePointer(hFile, lImportLookupTableEntryOffset, NULL, FILE_BEGIN);
         if (dwFilePtr == INVALID_SET_FILE_POINTER)
         {
             iRetVal = GetLastError();
-            printf("ERR: SetFilePointer failed with %d\n", iRetVal);
+            printf("ERR: SetFilePointer failed at ImportLookupTableEntryOffsetwith %d\n", iRetVal);
 
             goto shutdown;
         }
@@ -886,6 +913,7 @@ MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, PEType ePEType, IMAGE_DAT
 
             if (dwOrdinalNameFlag != dwOrdinalNameFlagMask)
             {
+                // printf("%llx %llx %llx\n", MyImportDirectory.ImportLookupTable[f], dwOrdinalNameFlag, dwOrdinalNameFlagMask);
                 DWORD dwHintNameTableEntryRVA = MyImportDirectory.ImportLookupTable[f] & 0x7fffffff;
                 LONG lHintNameTableEntryOffset = RVAToOffset(dwHintNameTableEntryRVA, SectionHeaders, SectionHeaderCount);
 
@@ -893,14 +921,46 @@ MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, PEType ePEType, IMAGE_DAT
                 if (dwFilePtr == INVALID_SET_FILE_POINTER)
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: SetFilePointer failed with %d\n", iRetVal);
+                    printf("ERR: SetFilePointer failed at HintNameTableEntry with %d\n", iRetVal);
 
                     goto shutdown;
                 }
+
+                WORD Hint;
+
+                if (!ReadFile(hFile, &Hint, sizeof(WORD), NULL, NULL))
+                {
+                    iRetVal = GetLastError();
+                    printf("ERR: ReadFile failed with %d\n", iRetVal);
+
+                    goto shutdown;
+                }
+
+                CHAR *Name = GetStringFromFile(hFile);
+
+                HINT_NAME_TABLE_ENTRY HintNameTableEntry = {
+                    .Hint = Hint,
+                    .Name = Name,
+                };
+
+                MyImportDirectory.HintNameTable[f] = HintNameTableEntry;
+                MyImportDirectory.Ordinals[f] = -1;
             }
             else
             {
+                // printf("%llx %llx %llx\n", MyImportDirectory.ImportLookupTable[f], dwOrdinalNameFlag, dwOrdinalNameFlagMask);
+                WORD Oridinal = MyImportDirectory.ImportLookupTable[f] & 0xffff;
+                MyImportDirectory.Ordinals[f] = Oridinal;
+
+                HINT_NAME_TABLE_ENTRY HintNameTableEntry = {
+                    .Hint = -1,
+                    .Name = "",
+                };
+                MyImportDirectory.HintNameTable[f] = HintNameTableEntry;
             }
+
+            DWORD ImportAddressTableEntryRVA = MyImportDirectory.ImportDirectory.FirstThunk + (f * ImportLookupTableEntrySize);
+            MyImportDirectory.ImportAddressTable[f] = ImportAddressTableEntryRVA;
         }
         else
         {
@@ -927,11 +987,104 @@ void PrintImportDirectory(MY_IMPORT_DIRECTORY MyImportDirectory)
            MyImportDirectory.ImportDirectory.TimeDateStamp, MyImportDirectory.ImportDirectory.ForwarderChain,
            MyImportDirectory.ImportDirectory.Name, MyImportDirectory.ImportDirectory.FirstThunk);
 
-    printf("Original Thunk\n");
+    printf("Ordinal     Hint        Name                    Original Thunk  Call Via\n");
 
     for (INT f = 0; f < MyImportDirectory.iImportedFunctionCount; ++f)
     {
-        printf("    0x%05x\n", MyImportDirectory.ImportLookupTable[f]);
+        printf("   %05d     0x%05x    %20s          0x%05llx      0x%05x\n",
+               MyImportDirectory.Ordinals[f], MyImportDirectory.HintNameTable[f].Hint, MyImportDirectory.HintNameTable[f].Name,
+               MyImportDirectory.ImportLookupTable[f], MyImportDirectory.ImportAddressTable[f]);
+    }
+}
+
+MY_IMPORT_DIRECTORIES ParseImportDirectories(HANDLE hFile, PEType ePEType, IMAGE_DATA_DIRECTORY ImageImportDirectory, INT iImportedFunctionCount, IMAGE_SECTION_HEADER *SectionHeaders, WORD SectionHeaderCount)
+{
+    INT iRetVal = 0;
+    LONG lImportDirectoryOffset = RVAToOffset(ImageImportDirectory.VirtualAddress, SectionHeaders, SectionHeaderCount);
+
+    DWORD dwFilePtr = SetFilePointer(hFile, lImportDirectoryOffset, NULL, FILE_BEGIN);
+    if (dwFilePtr == INVALID_SET_FILE_POINTER)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: SetFilePointer failed at ImportDirectoryOffset with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    DWORD ImportDescriptorCount = 0;
+
+    IMAGE_IMPORT_DESCRIPTOR ImportDescriptor;
+
+    if (!ReadFile(hFile, &ImportDescriptor, IMPORT_DIRECTORY_SIZE, NULL, NULL))
+    {
+        iRetVal = GetLastError();
+        printf("ERR: ReadFile failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    while (!IsImportDescriptorZero(ImportDescriptor))
+    {
+        ++ImportDescriptorCount;
+        lImportDirectoryOffset = RVAToOffset(ImageImportDirectory.VirtualAddress + (ImportDescriptorCount * IMPORT_DIRECTORY_SIZE), SectionHeaders, SectionHeaderCount);
+
+        dwFilePtr = SetFilePointer(hFile, lImportDirectoryOffset, NULL, FILE_BEGIN);
+        if (dwFilePtr == INVALID_SET_FILE_POINTER)
+        {
+            iRetVal = GetLastError();
+            printf("ERR: SetFilePointer failed at ImportDirectoryOffset with %d\n", iRetVal);
+
+            goto shutdown;
+        }
+
+        if (!ReadFile(hFile, &ImportDescriptor, IMPORT_DIRECTORY_SIZE, NULL, NULL))
+        {
+            iRetVal = GetLastError();
+            printf("ERR: ReadFile failed with %d\n", iRetVal);
+
+            goto shutdown;
+        }
+    }
+
+    MY_IMPORT_DIRECTORIES MyImportDirectories;
+    MyImportDirectories.ImportDirectoriesCount = ImportDescriptorCount;
+    MyImportDirectories.MyImportDirectories = (MY_IMPORT_DIRECTORY *)VirtualAlloc(NULL, sizeof(MY_IMPORT_DIRECTORY) * iImportedFunctionCount, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+
+    if (MyImportDirectories.MyImportDirectories == NULL)
+    {
+        iRetVal = GetLastError();
+        printf("ERR: VirtualAlloc failed with %d\n", iRetVal);
+
+        goto shutdown;
+    }
+
+    for (DWORD id = 0; id < ImportDescriptorCount; ++id)
+    {
+        LONG lImportDirectoryOffset = RVAToOffset(ImageImportDirectory.VirtualAddress + (id * IMPORT_DIRECTORY_SIZE), SectionHeaders, SectionHeaderCount);
+
+        DWORD dwFilePtr = SetFilePointer(hFile, lImportDirectoryOffset, NULL, FILE_BEGIN);
+        if (dwFilePtr == INVALID_SET_FILE_POINTER)
+        {
+            iRetVal = GetLastError();
+            printf("ERR: SetFilePointer failed at ImportDirectoryOffset with %d\n", iRetVal);
+
+            goto shutdown;
+        }
+
+        MyImportDirectories.MyImportDirectories[id] = ParseImportDirectory(hFile, lImportDirectoryOffset, ePEType, iImportedFunctionCount, SectionHeaders, SectionHeaderCount);
+    }
+
+shutdown:
+    MyImportDirectories.iRetVal = iRetVal;
+
+    return MyImportDirectories;
+}
+
+void PrintImportDirectories(MY_IMPORT_DIRECTORIES MyImportDirectories)
+{
+    for (UINT32 id = 0; id < MyImportDirectories.ImportDirectoriesCount; ++id)
+    {
+        PrintImportDirectory(MyImportDirectories.MyImportDirectories[id]);
     }
 }
 
@@ -1244,7 +1397,8 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
             }
         }
     }
-    else if (strcmp(Options[0], "--imported-functions") == 0)
+
+    if (strcmp(Options[0], "--imported-functions") == 0)
     {
         if (iOptionCount != 2)
         {
@@ -1257,28 +1411,77 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
 
         if (ePEType == PEType_x86)
         {
-            MY_IMPORT_DIRECTORY MyImportDirectory = ParseImportDirectory(hFile, ePEType, MyNTOptionalHeader.OptionalHeader32.DataDirectory[1], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
-            if (MyImportDirectory.iRetVal != 0)
+            MY_IMPORT_DIRECTORIES MyImportDirectories = ParseImportDirectories(hFile, ePEType, MyNTOptionalHeader.OptionalHeader32.DataDirectory[1], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
+            if (MyImportDirectories.iRetVal != 0)
             {
                 goto shutdown;
             }
 
-            PrintImportDirectory(MyImportDirectory);
+            PrintImportDirectories(MyImportDirectories);
 
-            if (MyImportDirectory.sName != NULL)
+            for (UINT32 id = 0; id < MyImportDirectories.ImportDirectoriesCount; ++id)
             {
-                if (!VirtualFree(MyImportDirectory.sName, 0, MEM_RELEASE))
-                {
-                    iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                MY_IMPORT_DIRECTORY MyImportDirectory = MyImportDirectories.MyImportDirectories[id];
 
-                    goto shutdown;
+                if (MyImportDirectory.sName != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.sName, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.ImportLookupTable != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.ImportLookupTable, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.HintNameTable != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.HintNameTable, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.Ordinals != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.Ordinals, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.ImportAddressTable != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.ImportAddressTable, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
                 }
             }
 
-            if (MyImportDirectory.ImportLookupTable != NULL)
+            if (MyImportDirectories.MyImportDirectories != NULL)
             {
-                if (!VirtualFree(MyImportDirectory.ImportLookupTable, 0, MEM_RELEASE))
+                if (!VirtualFree(MyImportDirectories.MyImportDirectories, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
                     printf("ERR: VirtualFree failed with %d\n", iRetVal);
@@ -1289,28 +1492,77 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
         }
         else if (ePEType == PEType_x86_64)
         {
-            MY_IMPORT_DIRECTORY MyImportDirectory = ParseImportDirectory(hFile, ePEType, MyNTOptionalHeader.OptionalHeader64.DataDirectory[1], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
-            if (MyImportDirectory.iRetVal != 0)
+            MY_IMPORT_DIRECTORIES MyImportDirectories = ParseImportDirectories(hFile, ePEType, MyNTOptionalHeader.OptionalHeader64.DataDirectory[1], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
+            if (MyImportDirectories.iRetVal != 0)
             {
                 goto shutdown;
             }
 
-            PrintImportDirectory(MyImportDirectory);
+            PrintImportDirectories(MyImportDirectories);
 
-            if (MyImportDirectory.sName != NULL)
+            for (UINT32 id = 0; id < MyImportDirectories.ImportDirectoriesCount; ++id)
             {
-                if (!VirtualFree(MyImportDirectory.sName, 0, MEM_RELEASE))
-                {
-                    iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                MY_IMPORT_DIRECTORY MyImportDirectory = MyImportDirectories.MyImportDirectories[id];
 
-                    goto shutdown;
+                if (MyImportDirectory.sName != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.sName, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.ImportLookupTable != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.ImportLookupTable, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.HintNameTable != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.HintNameTable, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.Ordinals != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.Ordinals, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
+                }
+
+                if (MyImportDirectory.ImportAddressTable != NULL)
+                {
+                    if (!VirtualFree(MyImportDirectory.ImportAddressTable, 0, MEM_RELEASE))
+                    {
+                        iRetVal = GetLastError();
+                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+
+                        goto shutdown;
+                    }
                 }
             }
 
-            if (MyImportDirectory.ImportLookupTable != NULL)
+            if (MyImportDirectories.MyImportDirectories != NULL)
             {
-                if (!VirtualFree(MyImportDirectory.ImportLookupTable, 0, MEM_RELEASE))
+                if (!VirtualFree(MyImportDirectories.MyImportDirectories, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
                     printf("ERR: VirtualFree failed with %d\n", iRetVal);
