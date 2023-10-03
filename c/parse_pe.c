@@ -664,6 +664,11 @@ MY_EXPORT_DIRECTORY ParseExportDirectory(HANDLE hFile, IMAGE_DATA_DIRECTORY Imag
     for (int f = 0; f < iExportedFunctionCount; ++f)
     {
         DWORD dwFunctionRVA = MyExportDirectory.ExportDirectory.AddressOfFunctions + (f * EXPORT_FUNCTION_RVA_SIZE);
+        if (dwFunctionRVA <= 0)
+        {
+            goto ordinals;
+        }
+
         LONG lFunctionRVAOffset = RVAToOffset(dwFunctionRVA, SectionHeaders, SectionHeadersCount);
 
         MyExportDirectory.Offsets[f] = lFunctionRVAOffset;
@@ -703,9 +708,10 @@ MY_EXPORT_DIRECTORY ParseExportDirectory(HANDLE hFile, IMAGE_DATA_DIRECTORY Imag
         }
         else
         {
-            MyExportDirectory.Forwarders[f] = "";
+            MyExportDirectory.Forwarders[f] = NULL;
         }
 
+    ordinals:
         LONG lOrdinalsRVAOffset = RVAToOffset(MyExportDirectory.ExportDirectory.AddressOfNameOrdinals + (f * EXPORT_ORDINAL_SIZE), SectionHeaders, SectionHeadersCount);
 
         dwFilePtr = SetFilePointer(hFile, lOrdinalsRVAOffset, NULL, FILE_BEGIN);
@@ -726,6 +732,7 @@ MY_EXPORT_DIRECTORY ParseExportDirectory(HANDLE hFile, IMAGE_DATA_DIRECTORY Imag
         }
         MyExportDirectory.Ordinals[f] += MyExportDirectory.ExportDirectory.Base;
 
+    name_rvas:
         LONG lNameRVAOffset = RVAToOffset(MyExportDirectory.ExportDirectory.AddressOfNames + (f * EXPORT_NAME_RVA_SIZE), SectionHeaders, SectionHeadersCount);
 
         dwFilePtr = SetFilePointer(hFile, lNameRVAOffset, NULL, FILE_BEGIN);
@@ -745,6 +752,13 @@ MY_EXPORT_DIRECTORY ParseExportDirectory(HANDLE hFile, IMAGE_DATA_DIRECTORY Imag
             goto shutdown;
         }
 
+    names:
+        if (MyExportDirectory.NameRVAs[f] <= 0)
+        {
+            printf("%d\n", MyExportDirectory.NameRVAs[f]);
+            continue;
+        }
+
         LONG lNameOffset = RVAToOffset(MyExportDirectory.NameRVAs[f], SectionHeaders, SectionHeadersCount);
 
         dwFilePtr = SetFilePointer(hFile, lNameOffset, NULL, FILE_BEGIN);
@@ -758,8 +772,7 @@ MY_EXPORT_DIRECTORY ParseExportDirectory(HANDLE hFile, IMAGE_DATA_DIRECTORY Imag
 
         CHAR *sName = GetStringFromFile(hFile);
         *(MyExportDirectory.Names + f) = sName;
-
-        printf("%s\n", *(MyExportDirectory.Names + f));
+        printf("%d %s\n", MyExportDirectory.NameRVAs[f], sName);
     }
 
 shutdown:
@@ -948,7 +961,6 @@ MY_IMPORT_DIRECTORY ParseImportDirectory(HANDLE hFile, LONG lImportDirectoryOffs
             }
             else
             {
-                // printf("%llx %llx %llx\n", MyImportDirectory.ImportLookupTable[f], dwOrdinalNameFlag, dwOrdinalNameFlagMask);
                 WORD Oridinal = MyImportDirectory.ImportLookupTable[f] & 0xffff;
                 MyImportDirectory.Ordinals[f] = Oridinal;
 
@@ -1204,7 +1216,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
 
         if (ePEType == PEType_x86)
         {
-            MY_EXPORT_DIRECTORY MyExportDirectory = ParseExportDirectory(hFile, MyNTOptionalHeader.OptionalHeader32.DataDirectory[0], iExportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
+            MY_EXPORT_DIRECTORY MyExportDirectory = ParseExportDirectory(hFile, MyNTOptionalHeader.OptionalHeader32.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT], iExportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
             if (MyExportDirectory.iRetVal != 0)
             {
                 goto shutdown;
@@ -1216,7 +1228,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.Offsets, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1227,7 +1239,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.FunctionRVAs, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1237,19 +1249,22 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
             {
                 for (INT f = 0; f < iExportedFunctionCount; ++f)
                 {
-                    if (!VirtualFree(MyExportDirectory.Forwarders + f, 0, MEM_RELEASE))
+                    if (MyExportDirectory.Forwarders[f] != NULL)
                     {
-                        iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        if (!VirtualFree(MyExportDirectory.Forwarders[f], 0, MEM_RELEASE))
+                        {
+                            iRetVal = GetLastError();
+                            printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
-                        goto shutdown;
+                            goto shutdown;
+                        }
                     }
                 }
 
                 if (!VirtualFree(MyExportDirectory.Forwarders, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1260,7 +1275,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.Ordinals, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1271,7 +1286,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.NameRVAs, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1281,10 +1296,10 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
             {
                 for (INT f = 0; f < iExportedFunctionCount; ++f)
                 {
-                    if (!VirtualFree(MyExportDirectory.Names + f, 0, MEM_RELEASE))
+                    if (!VirtualFree(MyExportDirectory.Names[f], 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1293,7 +1308,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.Names, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1301,7 +1316,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
         }
         else if (ePEType == PEType_x86_64)
         {
-            MY_EXPORT_DIRECTORY MyExportDirectory = ParseExportDirectory(hFile, MyNTOptionalHeader.OptionalHeader64.DataDirectory[0], iExportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
+            MY_EXPORT_DIRECTORY MyExportDirectory = ParseExportDirectory(hFile, MyNTOptionalHeader.OptionalHeader64.DataDirectory[IMAGE_DIRECTORY_ENTRY_EXPORT], iExportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
             if (MyExportDirectory.iRetVal != 0)
             {
                 goto shutdown;
@@ -1313,7 +1328,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.Offsets, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1324,7 +1339,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.FunctionRVAs, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1334,19 +1349,22 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
             {
                 for (INT f = 0; f < iExportedFunctionCount; ++f)
                 {
-                    if (!VirtualFree(MyExportDirectory.Forwarders + f, 0, MEM_RELEASE))
+                    if (MyExportDirectory.Forwarders[f] != NULL)
                     {
-                        iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        if (!VirtualFree(MyExportDirectory.Forwarders[f], 0, MEM_RELEASE))
+                        {
+                            iRetVal = GetLastError();
+                            printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
-                        goto shutdown;
+                            goto shutdown;
+                        }
                     }
                 }
 
                 if (!VirtualFree(MyExportDirectory.Forwarders, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1357,7 +1375,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.Ordinals, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1368,7 +1386,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.NameRVAs, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1378,10 +1396,10 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
             {
                 for (INT f = 0; f < iExportedFunctionCount; ++f)
                 {
-                    if (!VirtualFree(MyExportDirectory.Names + f, 0, MEM_RELEASE))
+                    if (!VirtualFree(MyExportDirectory.Names[f], 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1390,7 +1408,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyExportDirectory.Names, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1411,7 +1429,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
 
         if (ePEType == PEType_x86)
         {
-            MY_IMPORT_DIRECTORIES MyImportDirectories = ParseImportDirectories(hFile, ePEType, MyNTOptionalHeader.OptionalHeader32.DataDirectory[1], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
+            MY_IMPORT_DIRECTORIES MyImportDirectories = ParseImportDirectories(hFile, ePEType, MyNTOptionalHeader.OptionalHeader32.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
             if (MyImportDirectories.iRetVal != 0)
             {
                 goto shutdown;
@@ -1428,7 +1446,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.sName, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1439,7 +1457,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.ImportLookupTable, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1450,7 +1468,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.HintNameTable, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1461,7 +1479,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.Ordinals, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1472,7 +1490,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.ImportAddressTable, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1484,7 +1502,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyImportDirectories.MyImportDirectories, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1492,7 +1510,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
         }
         else if (ePEType == PEType_x86_64)
         {
-            MY_IMPORT_DIRECTORIES MyImportDirectories = ParseImportDirectories(hFile, ePEType, MyNTOptionalHeader.OptionalHeader64.DataDirectory[1], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
+            MY_IMPORT_DIRECTORIES MyImportDirectories = ParseImportDirectories(hFile, ePEType, MyNTOptionalHeader.OptionalHeader64.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT], iImportedFunctionCount, MySectionHeaders.SectionHeaders, MySectionHeaders.SectionHeadersCount);
             if (MyImportDirectories.iRetVal != 0)
             {
                 goto shutdown;
@@ -1509,7 +1527,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.sName, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1520,7 +1538,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.ImportLookupTable, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1531,7 +1549,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.HintNameTable, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1542,7 +1560,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.Ordinals, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1553,7 +1571,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                     if (!VirtualFree(MyImportDirectory.ImportAddressTable, 0, MEM_RELEASE))
                     {
                         iRetVal = GetLastError();
-                        printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                        printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                         goto shutdown;
                     }
@@ -1565,7 +1583,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
                 if (!VirtualFree(MyImportDirectories.MyImportDirectories, 0, MEM_RELEASE))
                 {
                     iRetVal = GetLastError();
-                    printf("ERR: VirtualFree failed with %d\n", iRetVal);
+                    printf("ERR: VirtualFree failed with %d at %d\n", iRetVal, __LINE__);
 
                     goto shutdown;
                 }
@@ -1580,7 +1598,7 @@ shutdown:
     {
         if (!VirtualFree(MyDOSStub.Stub, 0, MEM_RELEASE))
         {
-            printf("ERR: Dos Stub VirtualFree failed with %d\n", GetLastError());
+            printf("ERR: Dos Stub VirtualFree failed with %d at %d\n", GetLastError(), __LINE__);
         }
     }
 
@@ -1588,7 +1606,7 @@ shutdown:
     {
         if (!VirtualFree(MySectionHeaders.SectionHeaders, 0, MEM_RELEASE))
         {
-            printf("ERR: Section Headers VirtualFree failed with %d\n", GetLastError());
+            printf("ERR: Section Headers VirtualFree failed with %d at %d\n", GetLastError(), __LINE__);
         }
     }
 
