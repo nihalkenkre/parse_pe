@@ -519,7 +519,7 @@ void PrintNTHeadersOptionalHeader64(IMAGE_OPTIONAL_HEADER64 OptionalHeader)
            OptionalHeader.DataDirectory[15].VirtualAddress, OptionalHeader.DataDirectory[15].Size);
 }
 
-MY_SECTION_HEADERS parse_section_headers(HANDLE hFile, WORD SectionHeadersCount)
+MY_SECTION_HEADERS ParseSectionHeaders(HANDLE hFile, WORD SectionHeadersCount)
 {
     int iRetVal = 0;
 
@@ -1190,7 +1190,7 @@ int parse_pe(char *sFileName, char **Options, int iOptionCount)
         }
     }
 
-    MY_SECTION_HEADERS MySectionHeaders = parse_section_headers(hFile, MyNTHeaderFileHeader.FileHeader.NumberOfSections);
+    MY_SECTION_HEADERS MySectionHeaders = ParseSectionHeaders(hFile, MyNTHeaderFileHeader.FileHeader.NumberOfSections);
 
     if (MySectionHeaders.iRetVal != 0)
     {
