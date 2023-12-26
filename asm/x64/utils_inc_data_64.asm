@@ -1,0 +1,3 @@
+section .data
+STD_HANDLE_ENUM equ -11
+INVALID_HANDLE_VALUE equ -1
