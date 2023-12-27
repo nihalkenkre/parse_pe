@@ -112,6 +112,12 @@ typedef enum pe_type
     PEType_x86_64,
 } PEType;
 
+
+__declspec(dllexport) void ExportTest(void)
+{
+    return EXIT_FAILURE;
+}
+
 LONG RVAToOffset(LONG rva, IMAGE_SECTION_HEADER *SectionHeaders, WORD SectionHeadersCount)
 {
     for (WORD id = 0; id < SectionHeadersCount; ++id)
