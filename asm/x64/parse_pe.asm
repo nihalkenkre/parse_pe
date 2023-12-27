@@ -12,234 +12,136 @@ extern ReadFile
 extern VirtualFree
 extern CloseHandle
 
-
-; arg0: return addr for optional header     rcx
-; arg1: optional header size                rdx
-; arg2: file type 1: 64 bit 0: 32 bit       r8
+; arg0: rva                     rcx
+; arg1: section headers         rdx
+; arg2: section header count    r8 
 ;
-; return: addr for optional header          rax
-;
-; file handle                               r12
-parse_nt_header_optional_header:
+; return: offset                rax > 0
+rva_to_offset:
     push rbp
     mov rbp, rsp
 
-;     mov [rbp + 16], rcx
-;     mov [rbp + 24], rdx
-;     mov [rbp + 32], r8
+    mov [rbp + 16], rcx             ; rva
+    mov [rbp + 24], rdx             ; section headers
+    mov [rbp + 32], r8              ; section header count
 
-;     sub rsp, 32 + 8 + 8
-;     mov rcx, r12
-;     mov rdx, [rbp + 16]
-;     mov r8, [rbp + 24]                 ; bytes to read actual size
-;     xor r9, r9
-;     mov qword [rsp + 32], 0
-;     call ReadFile
-;     add rsp, 32 + 8 + 8
+    ; [rbp - 8] = current section header
+    ; [rbp - 16] = return code
+    sub rsp, 16                     ; allocate local variable space
 
-;     cmp rax, 1                          ; if ReadFile is successful
-;     je .continue
-;         sub rsp, 32
-;         lea rcx, ret_val_9_nt_header_optional_header_str
-;         mov rdx, ret_val_9_nt_header_optional_header_str.len
-;         call print_string
-;         add rsp, 32
+    mov qword [rbp - 16], 0
 
-;         sub rsp, 32
-;         call GetLastError
-;         add rsp, 32
+    mov rcx, [rbp + 32]             ; section header count
+    mov rdx, [rbp + 24]             ; section headers
+    .loop:
+        mov [rbp - 8], rdx          ; section header saved
 
-;         jmp .shutdown
+        add rdx, 12                 ; virtual addr
+        mov eax, [rdx]              ; virtual addr in rax
+        add rdx, 4                  ; size of raw data
 
-; .continue:
+        add eax, [rdx]              ; rax = virtual addr + raw data size
 
-; .shutdown:
+        cmp rax, [rbp + 16]         ; x >= rva
+        jge .return_offset
 
-    ; mov rax, [rbp + 16]                 ; return addr in rax
+        add rdx, 24                 ; add size of section header, next section header
+
+        dec rcx
+        cmp rcx, 0
+        jnz .loop
+
+        jmp .shutdown
+
+    .return_offset:
+        mov rax, [rbp + 16]         ; rva in rax
+        mov rdx, [rbp - 8]          ; section header in rdx
+
+        add rdx, 12                 ; virtual addr
+        sub dword eax, [rdx]              ; rva - virtual_addr
+
+        add rdx, 8                  ; raw data ptr
+        add dword eax, [rdx]              ; rva - virtual_addr + raw data pointer
+
+        mov [rbp - 16], rax
+
+.shutdown:
+    add rsp, 16                     ; free local variable space
+
+    mov rax, [rbp - 16]             ; return code in rax
 
     leave
     ret
 
-
-; arg0: return addr for file header         rcx
-;
-; return: return addr for file header       rax
-;
-; file handle                               r12
-parse_nt_header_file_header:
+; arg0: section headers             ; rcx
+; arg1: section header count        ; rdx
+loop_section_headers:
     push rbp
     mov rbp, rsp
 
-    ; mov [rbp + 16], rcx                  ; return addr in [rbp + 16]
+    mov [rbp + 16], rcx             ; section headers
+    mov [rbp + 24], rdx             ; section header count
 
-;     sub rsp, 32 + 8 + 8
-;     mov rcx, r12                        ; file handle as arg
-;     mov rdx, [rbp + 16]
-;     mov r8, 20                           ; bytes to read, actual size
-;     xor r9, r9
-;     mov qword [rsp + 32], 0
-;     call ReadFile
-;     add rsp, 32 + 8 + 8
+    mov rcx, [rbp + 24]             ; section header count
+    mov rax, [rbp + 16]             ; section headers in rax
 
-;     cmp rax, 1                            ; 1: successful read
-;     je .continue
-;         sub rsp, 32
-;         lea rcx, ret_val_7_nt_header_file_header_str
-;         mov rdx, ret_val_7_nt_header_file_header_str.len
-;         call print_string
-;         add rsp, 32
+    .loop:
+        add rax, 40                 ; add section header size, next section
 
-;         sub rsp, 32
-;         call GetLastError
-;         add rsp, 32
-
-;         jmp .shutdown
-; .continue:
-
-; .shutdown:
-;     mov rax, [rbp + 16]                 ; return addr in rax
+        dec rcx
+        cmp rcx, 0
+        jnz .loop
 
     leave
     ret
 
-; file handle           r12
-parse_nt_header_signature:
+; arg0: import descriptor table rva     rcx
+; arg1: section headers                 rdx
+; arg2: section header count            r8
+; arg3: file contents base addr         r9
+loop_import_descriptor_table:
     push rbp
     mov rbp, rsp
 
-    ; [rbp - 16] = signature
-;     sub rsp, 16                         ; allocate local variable space
+    mov [rbp + 16], rcx             ; IDT rva
+    mov [rbp + 24], rdx             ; section headers
+    mov [rbp + 32], r8              ; section header count
+    mov [rbp + 40], r9              ; file contents base addr
 
-;     sub rsp, 32 + 8 + 8
-;     mov rcx, r12
-;     mov rdx, rbp
-;     sub rdx, 16
-;     mov r8, 4
-;     xor r9, r9
-;     mov qword [rsp + 32], 0
-;     call ReadFile
-;     add rsp, 32 + 8 + 8
+    ; [rbp - 8] = offset
+    ; 8 bytes padding
+    sub rsp, 8                      ; allocate local variable space
 
-;     cmp rax, 1                            ; 1: successful read
-;     je .continue
-;         sub rsp, 32
-;         lea rcx, ret_val_6_nt_header_signature_str
-;         mov rdx, ret_val_6_nt_header_signature_str.len
-;         call print_string
-;         add rsp, 32
+    sub rsp, 32
+    mov rcx, [rbp + 16]             ; IDT rva
+    mov rdx, [rbp + 24]             ; section headers
+    mov r8, [rbp + 32]              ; section header count
+    call rva_to_offset              ; offset in rax
+    add rsp, 32
 
-;         sub rsp, 32
-;         call GetLastError
-;         add rsp, 32
+    mov [rbp - 8], rax              ; offset saved
+    mov rax, [rbp - 8]              ; offset
+    add rax, [rbp + 40]             ; base + offset
+    .loop:
+        add rax, 12                 ; Name RVA
+        cmp dword [rax], 0
+        je .loop_end
 
-;         jmp .shutdown
+        add rax, 8                  ; next IDT
 
-; .continue:
-;     ; sub rsp, 32
-;     ; mov rcx, rbp
-;     ; sub rcx, 16
-;     ; mov rdx, 4
-;     ; call print_string
-;     ; add rsp, 32
+        jmp .loop
 
-; .shutdown:
-;     add esp, 16
+.loop_end:
+
+    add rsp, 8                      ; free local variable space
 
     leave
     ret
 
-; arg1: stub size           rcx
-; file handle               r12
-parse_dos_stub:
+loop_export_descriptor_table:
     push rbp
     mov rbp, rsp
 
-    ; [rbp + 16] = stub size
-;     mov [rbp + 16], rcx
-
-;     ; [rbp - 256] = dos stub
-;     sub rsp, 256                        ; allocate local variable space
-
-;     sub rsp, 32 + 8 + 8
-
-;     mov rcx, r12                        ; file handle
-;     mov rdx, rbp
-;     sub rdx, 256                        ; output buffer
-;     mov r8, [rbp + 16]                  ; number of bytes to read
-;     xor r9, r9                          ; 0
-;     mov qword [rsp + 32], 0             ; 0
-;     call ReadFile
-
-;     add rsp, 32 + 8 + 8
-
-;     cmp rax, 1                            ; 1: successful read
-;     je .continue
-;         sub rsp, 32
-;         lea rcx, ret_val_5_dos_stub_str
-;         mov rdx, ret_val_5_dos_stub_str.len
-;         call print_string
-;         add rsp, 32
-
-;         sub rsp, 32
-;         call GetLastError
-;         add rsp, 32
-
-;         jmp .shutdown
-    
-; .continue:
-;     ; sub rsp, 32
-;     ; mov rcx, rbp
-;     ; sub rcx, 256
-;     ; mov rdx, [rbp + 16]
-;     ; call print_string
-;     ; add rsp, 32
-    
-; .shutdown:
-;     add rsp, 256                         ; free local variable space
-
-    leave
-    ret
-
-
-; file handle             r12
-;
-; arg0: return addr for my dos header      rcx
-;
-; return: return addr for my dos header    rax
-parse_dos_header:
-    push rbp
-    mov rbp, rsp
-
-    ; [rbp + 16] = return addr
-;     mov [rbp + 16], rcx
-
-;     sub rsp, 32 + 8 + 8
-;     mov rcx, r12
-;     mov rdx, [rbp + 16]
-;     mov r8, DOS_HEADER_BUFFER_SIZE
-;     xor r9, r9
-;     mov qword [rsp + 32], 0
-;     call ReadFile
-;     add rsp, 32 + 8 + 8
-
-;     cmp rax, 1                      ; if (ReadFile....)
-;     je .continue
-;         sub rsp, 32
-;         lea rcx, ret_val_4_dos_header_str
-;         mov rdx, ret_val_4_dos_header_str.len
-;         call print_string
-;         add rsp, 32
-
-;         sub rsp, 32
-;         call GetLastError
-;         add rsp, 32
-
-;         jmp .shutdown
-
-; .continue:
-;     mov rax, [rbp + 16]
-
-; .shutdown:
 
     leave
     ret
@@ -250,10 +152,98 @@ parse_pe:
     push rbp
     mov rbp, rsp
 
-    mov [rbp + 16], rcx
-    mov [rbp + 24], rdx
+    mov [rbp + 16], rcx             ; ibase addr
+    mov [rbp + 24], rdx             ; options
 
-    int3
+    ; [rbp - 8] = nt header
+    ; [rbp - 16] = file header
+    ; [rbp - 24] = optional header
+    ; [rbp - 32] = section header count
+    ; [rbp - 40] = section headers
+    ; [rbp - 48] = file bitness 1: 64 bit, 0: 32 bit
+    sub rsp, 48                     ; allocate local variable space
+
+    mov rbx, [rbp + 16]
+    add rbx, 0x3c
+
+    xor rax, rax
+    mov word ax, [rbx]              ; e_lfanew in rax
+
+    mov rbx, [rbp + 16]
+    add rbx, rax                    ; nt headers
+
+    mov [rbp - 8], rbx              ; nt headers saved
+    
+    add rbx, 4                      ; file header
+    mov [rbp - 16], rbx             ; file header saved
+
+    add rbx, 20                     ; optional header
+    mov [rbp - 24], rbx             ; optional header saved
+
+    xor rax, rax
+    xor rbx, rbx
+    mov rax, [rbp - 24]             ; optional heade in rax
+    mov bx, [rax]                   ; magic in rbx
+    mov bx, [rax + 16]              ; entry point in rbx
+
+    mov rbx, [rbp - 16]             ; file header in rbx
+    add rbx, 2
+    xor rax, rax
+    mov ax, [rbx]
+    mov [rbp - 32], rax             ; section header count saved
+
+    mov rbx, [rbp - 16]             ; file header in rbx
+    mov bx, [rbx]
+
+    cmp bx, 0x14c                   ; is file 32 bit
+    je .32bit
+        mov rax, [rbp - 24]         ; optional header in rax
+        add rax, 240                ; end of optional header
+
+        mov [rbp - 40], rax         ; section headers saved
+        mov qword [rbp - 48], 1     ; file bitness saved
+
+    jmp .continue_bit_check
+
+.32bit:
+    mov rax, [rbp - 24]             ; optional header in rax
+    add rax, 224                    ; end of optional header
+
+    mov [rbp - 40], rax             ; section headers saved
+    mov qword [rbp - 48], 0         ; file bitness saved
+
+.continue_bit_check:
+    ; loop section headers
+    sub rsp, 32
+    mov rcx, [rbp - 40]             ; section headers
+    mov rdx, [rbp - 32]             ; section headers count
+    call loop_section_headers
+    add rsp, 32
+    
+    ; loop IDT
+    mov rax, [rbp - 24]             ; optional header in rax
+
+    cmp qword [rbp - 48], 0         ; is file 32 bit
+    je .32bitiat
+        add rax, 120                ; IDT in rax
+        mov eax, [eax]
+
+        jmp .continue_iat
+
+.32bitiat:
+    add rax, 104                    ; IDT in rax
+    mov eax, [eax]
+
+.continue_iat:
+    sub rsp, 32
+    mov ecx, eax
+    mov rdx, [rbp - 40]
+    mov r8, [rbp - 32]
+    mov r9, [rbp + 16]
+    call loop_import_descriptor_table
+    add rsp, 32
+
+    add rsp, 48                     ; free local variable space
 
     leave
     ret
@@ -447,7 +437,6 @@ _parse_pe:
         add rsp, 32
 
 .shutdown:
-    int3
     sub rsp, 32
     mov rcx, [rbp - OF_FILE_STRUCT_SIZE - 32]
     xor rdx, rdx 
