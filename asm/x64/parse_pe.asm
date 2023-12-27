@@ -110,7 +110,7 @@ loop_import_descriptor_table:
 
     ; [rbp - 8] = offset
     ; 8 bytes padding
-    sub rsp, 8                      ; allocate local variable space
+    sub rsp, 16                      ; allocate local variable space
 
     sub rsp, 32
     mov rcx, [rbp + 16]             ; IDT rva
@@ -118,6 +118,9 @@ loop_import_descriptor_table:
     mov r8, [rbp + 32]              ; section header count
     call rva_to_offset              ; offset in rax
     add rsp, 32
+
+    cmp rax, 0                      ; offset == 0 ?
+    jle .loop_end
 
     mov [rbp - 8], rax              ; offset saved
     mov rax, [rbp - 8]              ; offset
@@ -131,17 +134,55 @@ loop_import_descriptor_table:
 
         jmp .loop
 
+    ; TODO: Loop through functions of each imported DLL
+
 .loop_end:
 
-    add rsp, 8                      ; free local variable space
+.shutdown:
+    add rsp, 16                      ; free local variable space
 
     leave
     ret
 
+; arg0: export directory table rva      rcx
+; arg1: section headers                 rdx
+; arg2: section header count            r8
+; arg3: file contents base addr         r9
 loop_export_descriptor_table:
     push rbp
     mov rbp, rsp
 
+    mov [rbp + 16], rcx                 ; EDT rva
+    mov [rbp + 24], rdx                 ; section headers
+    mov [rbp + 32], r8                  ; section header count
+    mov [rbp + 40], r9                  ; file contents base addr
+
+    ; [rbp - 8] = offset
+    ; 8 bytes padding
+    sub rsp, 16                         ; allocate local variable space
+
+    sub rsp, 32
+    mov rcx, [rbp + 16]
+    mov rdx, [rbp + 24]
+    mov r8, [rbp + 32]
+    call rva_to_offset                  ; offset in rax
+    add rsp, 32
+
+    cmp rax, 0                          ; offset == 0 ?
+
+    jle .shutdown
+
+    mov [rbp - 8], rax                  ; offset saved
+
+    mov rax, [rbp - 8]                  ; offset
+    add rax, [rbp + 40]                 ; base + offset
+
+    mov ecx, [rax + 20]                 ; Number of entries in EAT
+
+    ; TODO: Loop through exported functions / names
+    
+.shutdown:
+    add rsp, 16                         ; free local variable space
 
     leave
     ret
@@ -219,22 +260,29 @@ parse_pe:
     mov rdx, [rbp - 32]             ; section headers count
     call loop_section_headers
     add rsp, 32
-    
+
+.iat:    
     ; loop IDT
-    mov rax, [rbp - 24]             ; optional header in rax
+    mov rax, [rbp - 24]             ; optional header
 
     cmp qword [rbp - 48], 0         ; is file 32 bit
     je .32bitiat
-        add rax, 120                ; IDT in rax
+        add rax, 120                ; IDT
         mov eax, [eax]
 
-        jmp .continue_iat
+        cmp eax, 0                  ; if IDT rva == 0 ?
+        je .edt
+
+        jmp .continue_bitcheck_iat
 
 .32bitiat:
-    add rax, 104                    ; IDT in rax
+    add rax, 104                    ; IDT
     mov eax, [eax]
 
-.continue_iat:
+    cmp eax, 0                      ; if IDT rva == 0 ?
+    je .edt
+
+.continue_bitcheck_iat:
     sub rsp, 32
     mov ecx, eax
     mov rdx, [rbp - 40]
@@ -243,6 +291,38 @@ parse_pe:
     call loop_import_descriptor_table
     add rsp, 32
 
+.edt:
+    ; loop EDT
+    int3
+    mov rax, [rbp - 24]             ; optional header
+    cmp qword [rbp - 48], 0         ; is file 32 bit
+
+    je .32biteat
+        add rax, 112                ; EDT
+        mov eax, [eax]
+
+        cmp eax, 0                  ; if EDT rva == 0 ?
+        je .shutdown
+
+        jmp .continue_bitcheck_eat
+
+.32biteat:
+    add rax, 96                     ; EDT
+    mov eax, [eax]
+
+    cmp eax, 0                      ; if EDT rva == 0 ?
+    je .shutdown
+
+.continue_bitcheck_eat:
+    sub rsp, 32
+    mov ecx, eax
+    mov rdx, [rbp - 40]
+    mov r8, [rbp - 32]
+    mov r9, [rbp + 16]
+    call loop_export_descriptor_table
+    add rsp, 32
+
+.shutdown:
     add rsp, 48                     ; free local variable space
 
     leave
