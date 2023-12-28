@@ -29,7 +29,7 @@ rva_to_offset:
     ; [rbp - 16] = return code
     sub rsp, 16                     ; allocate local variable space
 
-    mov qword [rbp - 16], 0         ; return code
+    mov qword [rbp - 16], 0
 
     mov rcx, [rbp + 32]             ; section header count
     mov rdx, [rbp + 24]             ; section headers
@@ -58,10 +58,10 @@ rva_to_offset:
         mov rdx, [rbp - 8]          ; section header in rdx
 
         add rdx, 12                 ; virtual addr
-        sub dword eax, [rdx]        ; rva - virtual_addr
+        sub dword eax, [rdx]              ; rva - virtual_addr
 
         add rdx, 8                  ; raw data ptr
-        add dword eax, [rdx]        ; rva - virtual_addr + raw data pointer
+        add dword eax, [rdx]              ; rva - virtual_addr + raw data pointer
 
         mov [rbp - 16], rax
 
@@ -262,7 +262,7 @@ parse_pe:
     call loop_section_headers
     add rsp, 32
 
-.irt:    
+.iat:    
     ; loop IDT
     mov rax, [rbp - 24]             ; optional header
 
