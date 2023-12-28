@@ -292,11 +292,13 @@ parse_pe:
     leave
     ret
 
+
 ; arg0: argc        [ebp + 8]
 ; arg1: *argv[]     [ebp + 12]
 _parse_pe:
     push ebp
     mov ebp, esp
+
     ; [ebp - OF_FILE_STRUCT_SIZE] = OFFILESTRUCT
     ; [ebp - OF_FILE_STRUCT_SIZE - 4] = file handle
     ; [ebp - OF_FILE_STRUCT_SIZE - 8] = getfilesize high order dw of file size
@@ -456,7 +458,6 @@ _parse_pe:
 
     leave
     ret
-
 
 section .data
 %include 'utils_inc_data_32.asm'

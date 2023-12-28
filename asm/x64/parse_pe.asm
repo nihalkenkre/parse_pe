@@ -34,7 +34,9 @@ rva_to_offset:
     mov rcx, [rbp + 32]             ; section header count
     mov rdx, [rbp + 24]             ; section headers
     .loop:
+
         mov [rbp - 8], rdx          ; current section header
+
 
         add rdx, 12                 ; virtual addr
         mov eax, [rdx]              ; virtual addr in rax
@@ -58,6 +60,7 @@ rva_to_offset:
         mov rdx, [rbp - 8]          ; section header in rdx
 
         add rdx, 12                 ; virtual addr
+
         sub dword eax, [rdx]        ; rva - virtual_addr
 
         add rdx, 8                  ; raw data ptr
@@ -72,6 +75,7 @@ rva_to_offset:
 
     leave
     ret
+
 
 ; arg0: section headers             rcx
 ; arg1: section header count        rdx
@@ -120,6 +124,7 @@ loop_import_descriptor_table:
     add rsp, 32
 
     cmp rax, 0                      ; offset == 0 ?
+
     jle .shutdown
 
     mov [rbp - 8], rax              ; offset saved
@@ -193,6 +198,7 @@ parse_pe:
     push rbp
     mov rbp, rsp
 
+
     mov [rbp + 16], rcx             ; base addr
     mov [rbp + 24], rdx             ; options
 
@@ -213,7 +219,6 @@ parse_pe:
 
     mov rbx, [rbp + 16]             ; base addr
     add rbx, rax                    ; nt headers
-
     mov [rbp - 8], rbx              ; nt headers saved
     
     add rbx, 4                      ; file header
@@ -224,7 +229,9 @@ parse_pe:
 
     xor rax, rax
     xor rbx, rbx
+
     mov rax, [rbp - 24]             ; optional header in rax
+
     mov bx, [rax]                   ; magic in rbx
     mov bx, [rax + 16]              ; entry point in rbx
 
@@ -262,11 +269,13 @@ parse_pe:
     call loop_section_headers
     add rsp, 32
 
-.irt:    
+
+.idt:
     ; loop IDT
     mov rax, [rbp - 24]             ; optional header
 
     cmp qword [rbp - 48], 0         ; is file 32 bit
+
     je .32bitidt
         add rax, 120                ; IDT
         mov eax, [eax]
@@ -277,6 +286,7 @@ parse_pe:
         jmp .continue_bitcheck_iat
 
 .32bitidt:
+
     add rax, 104                    ; IDT
     mov eax, [eax]
 
@@ -284,6 +294,7 @@ parse_pe:
     je .edt
 
 .continue_bitcheck_idt:
+
     sub rsp, 32
     mov ecx, eax
     mov rdx, [rbp - 40]
@@ -299,6 +310,7 @@ parse_pe:
     cmp qword [rbp - 48], 0         ; is file 32 bit
 
     je .32bitedt
+
         add rax, 112                ; EDT
         mov eax, [eax]
 
@@ -308,6 +320,7 @@ parse_pe:
         jmp .continue_bitcheck_edt
 
 .32bitedt:
+
     add rax, 96                     ; EDT
     mov eax, [eax]
 
@@ -542,6 +555,7 @@ section .data
 
 ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0
 .len equ $ - ret_val_1_str
+
 
 ret_val_2_str: db 'ERR: Input file does not exist', 0
 .len equ $ - ret_val_2_str

@@ -177,7 +177,7 @@ class NTHeader:
         pass
 
 
-class NTHeaderSignature():
+class NTHeaderSignature:
     def __init__(self, nt_header_signature_bytes: bytes = None) -> None:
         if nt_header_signature_bytes is None:
             return

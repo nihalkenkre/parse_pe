@@ -552,7 +552,6 @@ strchr:
     leave
     ret
 
-
 ; arg0: string buffer      [ebp + 8]
 ; arg1: string len         [ebp + 12]
 print_string:

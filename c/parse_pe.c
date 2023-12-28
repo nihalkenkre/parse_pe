@@ -736,7 +736,7 @@ MY_EXPORT_DIRECTORY ParseExportDirectory(HANDLE hFile, IMAGE_DATA_DIRECTORY Imag
 
             goto shutdown;
         }
-        MyExportDirectory.Ordinals[f] += MyExportDirectory.ExportDirectory.Base;
+        MyExportDirectory.Ordinals[f] += (WORD)MyExportDirectory.ExportDirectory.Base;
 
     name_rvas:
         LONG lNameRVAOffset = RVAToOffset(MyExportDirectory.ExportDirectory.AddressOfNames + (f * EXPORT_NAME_RVA_SIZE), SectionHeaders, SectionHeadersCount);
