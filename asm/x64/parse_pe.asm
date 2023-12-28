@@ -29,12 +29,12 @@ rva_to_offset:
     ; [rbp - 16] = return code
     sub rsp, 16                     ; allocate local variable space
 
-    mov qword [rbp - 16], 0
+    mov qword [rbp - 16], 0         ; return code
 
     mov rcx, [rbp + 32]             ; section header count
     mov rdx, [rbp + 24]             ; section headers
     .loop:
-        mov [rbp - 8], rdx          ; section header saved
+        mov [rbp - 8], rdx          ; current section header
 
         add rdx, 12                 ; virtual addr
         mov eax, [rdx]              ; virtual addr in rax
@@ -58,10 +58,10 @@ rva_to_offset:
         mov rdx, [rbp - 8]          ; section header in rdx
 
         add rdx, 12                 ; virtual addr
-        sub dword eax, [rdx]              ; rva - virtual_addr
+        sub dword eax, [rdx]        ; rva - virtual_addr
 
         add rdx, 8                  ; raw data ptr
-        add dword eax, [rdx]              ; rva - virtual_addr + raw data pointer
+        add dword eax, [rdx]        ; rva - virtual_addr + raw data pointer
 
         mov [rbp - 16], rax
 
@@ -73,8 +73,8 @@ rva_to_offset:
     leave
     ret
 
-; arg0: section headers             ; rcx
-; arg1: section header count        ; rdx
+; arg0: section headers             rcx
+; arg1: section header count        rdx
 loop_section_headers:
     push rbp
     mov rbp, rsp
@@ -86,7 +86,7 @@ loop_section_headers:
     mov rax, [rbp + 16]             ; section headers in rax
 
     .loop:
-        add rax, 40                 ; add section header size, next section
+        add rax, 40                 ; add section header size (next section header)
 
         dec rcx
         cmp rcx, 0
@@ -120,7 +120,7 @@ loop_import_descriptor_table:
     add rsp, 32
 
     cmp rax, 0                      ; offset == 0 ?
-    jle .loop_end
+    jle .shutdown
 
     mov [rbp - 8], rax              ; offset saved
     mov rax, [rbp - 8]              ; offset
@@ -187,13 +187,13 @@ loop_export_descriptor_table:
     leave
     ret
 
-; arg0: mem addr file contents    rcx
+; arg0: base addr file contents   rcx
 ; arg1: Options                   rdx
 parse_pe:
     push rbp
     mov rbp, rsp
 
-    mov [rbp + 16], rcx             ; ibase addr
+    mov [rbp + 16], rcx             ; base addr
     mov [rbp + 24], rdx             ; options
 
     ; [rbp - 8] = nt header
@@ -204,13 +204,14 @@ parse_pe:
     ; [rbp - 48] = file bitness 1: 64 bit, 0: 32 bit
     sub rsp, 48                     ; allocate local variable space
 
-    mov rbx, [rbp + 16]
-    add rbx, 0x3c
+    ; retrive and  save the information to the above stack variables
+    mov rbx, [rbp + 16]             ; base addr
+    add rbx, 0x3c                   ; offset of e_lfanew
 
     xor rax, rax
     mov word ax, [rbx]              ; e_lfanew in rax
 
-    mov rbx, [rbp + 16]
+    mov rbx, [rbp + 16]             ; base addr
     add rbx, rax                    ; nt headers
 
     mov [rbp - 8], rbx              ; nt headers saved
@@ -223,7 +224,7 @@ parse_pe:
 
     xor rax, rax
     xor rbx, rbx
-    mov rax, [rbp - 24]             ; optional heade in rax
+    mov rax, [rbp - 24]             ; optional header in rax
     mov bx, [rax]                   ; magic in rbx
     mov bx, [rax + 16]              ; entry point in rbx
 
@@ -261,12 +262,12 @@ parse_pe:
     call loop_section_headers
     add rsp, 32
 
-.iat:    
+.irt:    
     ; loop IDT
     mov rax, [rbp - 24]             ; optional header
 
     cmp qword [rbp - 48], 0         ; is file 32 bit
-    je .32bitiat
+    je .32bitidt
         add rax, 120                ; IDT
         mov eax, [eax]
 
@@ -275,14 +276,14 @@ parse_pe:
 
         jmp .continue_bitcheck_iat
 
-.32bitiat:
+.32bitidt:
     add rax, 104                    ; IDT
     mov eax, [eax]
 
     cmp eax, 0                      ; if IDT rva == 0 ?
     je .edt
 
-.continue_bitcheck_iat:
+.continue_bitcheck_idt:
     sub rsp, 32
     mov ecx, eax
     mov rdx, [rbp - 40]
@@ -297,23 +298,23 @@ parse_pe:
     mov rax, [rbp - 24]             ; optional header
     cmp qword [rbp - 48], 0         ; is file 32 bit
 
-    je .32biteat
+    je .32bitedt
         add rax, 112                ; EDT
         mov eax, [eax]
 
         cmp eax, 0                  ; if EDT rva == 0 ?
         je .shutdown
 
-        jmp .continue_bitcheck_eat
+        jmp .continue_bitcheck_edt
 
-.32biteat:
+.32bitedt:
     add rax, 96                     ; EDT
     mov eax, [eax]
 
     cmp eax, 0                      ; if EDT rva == 0 ?
     je .shutdown
 
-.continue_bitcheck_eat:
+.continue_bitcheck_edt:
     sub rsp, 32
     mov ecx, eax
     mov rdx, [rbp - 40]
@@ -344,7 +345,7 @@ _parse_pe:
     ; [rbp - OF_FILE_STRUCT_SIZE - 8] = file handle
     ; [rbp - OF_FILE_STRUCT_SIZE - 16] = getfilesize high order dw of file size
     ; [rbp - OF_FILE_STRUCT_SIZE - 24] = getfilesize low order dw of file size
-    ; [rpb - OF_FILE_STRUCT_SIZE - 32] = allocated address for input file read
+    ; [rpb - OF_FILE_STRUCT_SIZE - 32] = allocated mem for input file read
     ; [rbp - OF_FILE_STRUCT_SIZE - 40] = return code
     ; 8 bytes
     sub rsp, OF_FILE_STRUCT_SIZE + 48     ; allocate local variable space
@@ -542,7 +543,7 @@ section .data
 ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0
 .len equ $ - ret_val_1_str
 
-ret_val_2_str: db 'ERR: Input file not exist', 0
+ret_val_2_str: db 'ERR: Input file does not exist', 0
 .len equ $ - ret_val_2_str
 
 ret_val_3_open_file_str: db 'OpenFile failed', 0

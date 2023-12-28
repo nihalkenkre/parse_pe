@@ -552,59 +552,6 @@ strchr:
     leave
     ret
 
-; arg0: rva                     [ebp + 8]
-; arg1: *section_headers        [ebp + 12]
-; arg2: section_header_count    [ebp + 16]
-rva_to_offset:
-    push ebp
-    mov ebp, esp
-
-    ; [ebp - 4] = id
-    sub esp, 4
-    pusha
-
-    mov dword [ebp - 4], 0         ; id = 0
-
-    .loop:
-        xor edx, edx
-        mov edx, [ebp + 12]         ; section header ptr in edx
-        
-        xor ebx, ebx
-        mov ebx, [ebp - 4]          ; id in ebx
-
-        mov edx, [edx + ebx]        ; section header in edx
-
-        inc dword [ebp - 4]         ; ++id
-        mov eax, [ebp + 16]         ; section_header_count in eax
-        cmp eax, [ebp - 4]          ; id == section_header_count ?
-
-        jne .loop
-
-    popa
-    add esp, 4
-
-    add esp, 12                     ; free arg stack
-
-    leave
-    ret
-
-;no args
-get_kernel_module_handle:
-    push ebp
-    mov ebp, esp
-
-    ; [ebp - 4] = pPeb, [ebp - 8] = First Entry, [ebp - 12] = CurrentListEntry
-    ; [ebp - 16] = TableEntry
-
-    sub esp, 16
-    pusha
-
-    popa
-    add esp, 16
-
-    leave
-    ret
-
 
 ; arg0: string buffer      [ebp + 8]
 ; arg1: string len         [ebp + 12]

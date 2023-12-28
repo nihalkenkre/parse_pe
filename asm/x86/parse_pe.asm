@@ -4,361 +4,458 @@ global _parse_pe
 %include 'utils_inc_text_32.asm'
 
 extern _PathFileExistsA@4
-extern _OpenFile@12
-extern _ReadFile@20
 extern _GetLastError@0
+extern _OpenFile@12
+extern _GetFileSize@8
+extern _VirtualAlloc@16
+extern _ReadFile@20
+extern _VirtualFree@12
 extern _CloseHandle@4
 
-
-; arg0: return addr for optional header     [ebp + 8]
-; arg1: optional header size                [ebp + 12]
-; arg1: file handle                         [ebp + 16]
-; arg2: file type 1: 64 bit 0: 32 bit       [ebp + 20]
+; arg0: rva                         [ebp + 8]
+; arg1: section headers             [ebp + 12]
+; arg2: section header count        [ebp + 16]
 ;
-; return: addr for optional header          eax
-;
-parse_nt_header_optional_header:
+; returns offset                    rax > 0
+rva_to_offset:
     push ebp
     mov ebp, esp
 
-    push dword 0
-    push dword 0
-    push dword [ebp + 12]               ; bytes to read, actual size
-    push dword [ebp + 8]
-    push dword [ebp + 16]
-    call _ReadFile@20
+    ; [ebp - 4] = current section header
+    ; [ebp - 8] = return code
+    sub esp, 8                      ; allocate local variable space
 
-    cmp eax, 1                          ; 1: successful read
-    je .continue
-        push ret_val_8_nt_header_optional_header_str.len
-        push ret_val_8_nt_header_optional_header_str
-        call print_string
+    mov dword [ebp - 8], 0          ; return code
 
-        call _GetLastError@0
+    mov ecx, [ebp + 16]             ; section header count
+    mov edx, [ebp + 12]             ; section headers
 
-        jmp .shutdown
+    .loop:
+        mov [ebp - 4], edx          ; current section header
+        add edx, 12                 ; virtual addr
+        mov eax, [edx]              ; virtual addr in eax
 
-.continue:
+        add edx, 4                  ; size of raw data
+        add eax, [edx]              ; eax = virtual addr + raw data size
+
+        cmp eax, [ebp + 8]          ; x >= rva
+        jge .return_offset
+
+        add edx, 24                 ; add offset to end of section header (go to next header)
+
+        dec ecx
+        cmp ecx, 0
+        jnz .loop
+
+    .return_offset:
+        mov eax, [ebp + 8]          ; rva in eax
+        mov edx, [ebp - 4]          ; current section header
+
+        add edx, 12                 ; virtual addr
+        sub eax, [edx]              ; rva - virtual addr
+
+        add edx, 8                  ; raw data ptr
+        add eax, [edx]              ; rva - virtual addr + raw data pointer
+
+        mov [ebp - 8], eax
+    
+.shutdown:
+    add esp, 8                      ; free local variable space
+    add esp, 12                     ; free arg stack
+
+    mov eax, [ebp - 8]
+
+    leave
+    ret
+
+; arg0: section headers             [ebp + 8]
+; arg1: section header count        [ebp + 12]
+loop_section_headers:
+    push ebp
+    mov ebp, esp
+
+    mov ecx, [ebp + 12]             ; section header count
+    mov edx, [ebp + 8]              ; section headers
+
+    .loop:
+        add edx, 40                 ; add section header size (next section header)
+
+        dec ecx
+        cmp ecx, 0
+        jnz .loop
+
+    add esp, 8                      ; free arg stack
+
+    leave
+    ret
+
+; arg0: import descriptor table rva     [ebp + 8]
+; arg1: section headers                 [ebp + 12]
+; arg2: section header count            [ebp + 16]
+; arg3: base addr file contents         [ebp + 20]
+loop_import_descriptor_table:
+    push ebp
+    mov ebp, esp
+
+    ; [ebp - 4] = offset
+    sub esp, 4                      ; allocate local variable space
+
+    push dword [ebp + 16]                 ; section header count
+    push dword [ebp + 12]                 ; section headers
+    push dword [ebp + 8]                  ; IDT rva
+    call rva_to_offset              ; offset in eax
+
+    cmp eax, 0                      ; offset == 0 ?
+    jle .shutdown
+
+    mov [ebp - 4], eax              ; offset
+    mov eax, [ebp + 20]             ; base addr
+    add eax, [ebp - 4]              ; base addr + offset
+        
+    .loop:
+        add eax, 12                 ; name RVA
+        cmp dword [eax], 0
+        je .loop_end
+
+        add eax, 8                  ; next IDT
+        jmp .loop
+
+    ; TODO: Loop through functions of each imported DLL
+
+.loop_end:
 
 .shutdown:
-    mov eax, [ebp + 8]              ; return addr in eax
-
+    add esp, 4                      ; free local variable space
     add esp, 16                     ; free arg stack
 
     leave
     ret
 
-; arg0: return addr of file header      [ebp + 8]
-; arg1: file handle                     [ebp + 12]
-;
-; return: addr of file header           eax
-parse_nt_header_file_header:
+; arg0: export directory table rva      [ebp + 8]
+; arg1: section headers                 [ebp + 12]
+; arg2: section header count            [ebp + 16]
+; arg3: file contents base addr         [ebp + 20]
+loop_export_descriptor_table:
     push ebp
     mov ebp, esp
 
-    push dword 0
-    push dword 0
-    push 20                         ; bytes to read, actual size
-    push dword [ebp + 8]
-    push dword [ebp + 12]
-    call _ReadFile@20
-
-    cmp eax, 1                      ; 1: successful read
-    je .continue
-        push ret_val_7_nt_header_file_header_str.len
-        push ret_val_7_nt_header_file_header_str
-        call print_string
-
-        call _GetLastError@0
-
-        jmp .shutdown
-
-.continue:
-
-.shutdown:
-    mov eax, [ebp + 8]          ; return addr in eax
-
-    add esp, 8                  ; free arg stack
-
-    leave
-    ret
-
-; arg1: file handle                     [ebp + 12]
-;
-; return: addr of file header           eax
-parse_nt_header_signature:
-    push ebp
-    mov ebp, esp
-
-    ; [ebp - 4] = signature
+    ; [ebp - 4] = offset
     sub esp, 4                      ; allocate local variable space
 
-    push dword 0
-    push dword 0
-    push 4                          ; number of bytes to read
-    mov eax, ebp
-    sub eax, 4
-    push eax                        ; output buffer
-    push dword [ebp + 8]            ; file handle
-    call _ReadFile@20
+    push dword [ebp + 16]                 ; section header count
+    push dword [ebp + 12]                 ; section headers
+    push dword [ebp + 8]                  ; IDT rva
+    call rva_to_offset              ; offset in eax
 
-    cmp eax, 1                      ; 1: successful read
-    je .continue
-        push ret_val_6_nt_header_signature_str.len
-        push ret_val_6_nt_header_signature_str
-        call print_string
+    cmp eax, 0                      ; offset == 0 ?
+    jle .shutdown
 
-        call _GetLastError@0
+    mov [ebp - 4], eax              ; offset
+    mov eax, [ebp + 20]             ; base addr
+    add eax, [ebp - 4]              ; base + offset
 
-        jmp .shutdown
+    mov ecx, [eax + 20]             ; number of entries in eat
+    
+    ; TODO: Loop through exported functions / names
 
-.continue:
-    ; push dword 4
-    ; mov eax, ebp
-    ; sub eax, 4
-    ; push eax
-    ; call print_string
 
 .shutdown:
-    add esp, 4                  ; free local variable space
-
-    add esp, 4                  ; free arg stack
-
-    leave
-    ret
-
-; arg0: sub size                [ebp + 8]
-; arg1: file handle             [ebp + 12]
-parse_dos_stub:
-    push ebp
-    mov ebp, esp
-
-    ; [ebp - 256] = dos stub
-    sub esp, 256                    ; allocate local variable space
-
-    push dword 0
-    push dword 0
-    push dword [ebp + 8]            ; number of bytes to read
-    mov eax, ebp
-    sub eax, 256               
-    push dword eax                  ; output buffer
-    push dword [ebp + 12]           ; file handle
-    call _ReadFile@20
-
-    cmp eax, 1                      ; 1: successful read
-    je .continue
-        push ret_val_5_dos_stub_str.len
-        push ret_val_5_dos_stub_str
-        call print_string
-
-        call _GetLastError@0
-
-        jmp .shutdown
-
-.continue:
-    ; push dword [ebp + 8]
-    ; mov eax, ebp
-    ; sub eax, 256
-    ; push eax
-    ; call print_string
-
-.shutdown:
-    add esp, 256                    ; free local variable space
-
-    add esp, 8                      ; free arg stack
+    add esp, 4                      ; free local variable space
+    add esp, 16                     ; free arg stack
 
     leave
     ret
 
-; arg0: return struct addr          [ebp + 8]
-; arg1: file handle                 [ebp + 12]
-;
-; return: return struct addr        eax
-parse_dos_header:
-    push ebp
-    mov ebp, esp
-
-    push dword 0
-    push dword 0
-    push dword 64
-    push dword [ebp + 8]
-    push dword [ebp + 12]
-
-    call _ReadFile@20
-
-    cmp eax, 1                      ; if ReadFile is successful
-    je .continue
-
-        call _GetLastError@0
-
-        mov [ebp - 4], eax          ; GetLastError in [ebp - 4]
-
-        push ret_val_4_dos_header_str.len
-        push ret_val_4_dos_header_str
-        call print_string
-
-        add esp, 8                  ; free arg stack
-
-        leave
-        ret
-
-.continue:
-    mov eax, [ebp + 8]              ; return struct addr to eax
-    add esp, 8                      ; free arg stack
-
-    leave
-    ret
-
-; arg0: ptr to file path            [ebp + 8]
-; arg1: ptr to options              [ebp + 12]
+; arg0: base addr file contents      [ebp + 8]
+; arg1: Options                      [ebp + 12]
 parse_pe:
     push ebp
     mov ebp, esp
 
-    ; [ebp - 144]                       = OpenFileStruct, [ebp - 4] = File Handle
-    ; [ebp - 144 - 64]                  = return mem for my_dos_header
-    ; [ebp - 144 - 64 - 20]             = return mem for file header
-    ; [ebp - 144 - 64 - 20 - 256]       = return mem for optional header
-    sub esp, OF_FILE_STRUCT_SIZE + DOS_HEADER_BUFFER_SIZE + NT_FILE_HEADER_BUFFER_SIZE + OPTIONAL_HEADER_BUFFER_SIZE              ; allocate local variable space
+    ; [ebp - 4] = nt header
+    ; [ebp - 8] = file header
+    ; [ebp - 12] = optional header
+    ; [ebp - 16] = section header count
+    ; [ebp - 20] = section headers
+    ; [ebp - 24] = file bitness 1: 64 bit, 0: 32 bit
+    sub esp, 24                     ; allocate local variable space
 
-    push OF_READ
-    mov edx, ebp
-    sub edx, OF_FILE_STRUCT_SIZE
-    push edx
-    push dword [ebp + 8]
-    call _OpenFile@12
+    ; retrive and  save the information to the above stack variables
+    mov ebx, [ebp + 8]              ; base addr
+    add ebx, 0x3c                   ; offset of e_lfanew
 
-    cmp eax, INVALID_HANDLE_VALUE
-    jne .continue_open_file
+    xor eax, eax
+    mov ax, [ebx]                   ; e_lfanew
 
-    push ret_val_3_str.len
-    push ret_val_3_str
-    call print_string
+    mov ebx, [ebp + 8]
+    add ebx, eax                    ; nt headers
+    mov [ebp - 4], ebx              ; nt headers saved
 
-    mov dword eax, 3
+    add ebx, 4                      ; file header
+    mov [ebp - 8], ebx              ; file header saved
 
-    jmp .shutdown
-.continue_open_file:
-    mov [ebp - 4], eax                  ; file Handle in [ebp - 4]
+    xor eax, eax
+    add ebx, 2                      ; section header count 
+    mov ax, [ebx]
+    mov [ebp - 16], eax             ; section header count saved
 
-    push dword [ebp - 4]                ; file handle as arg
-    mov ebx, ebp
-    sub ebx, (OPTIONAL_HEADER_BUFFER_SIZE + DOS_HEADER_BUFFER_SIZE)
-    push dword ebx                      ; my_dos_header addr as arg
-    call parse_dos_header
+    add ebx, 18                     ; optional header
+    mov [ebp - 12], ebx             ; optional header saved
+    
+    mov eax, [ebp - 8]              ; file header
+    mov ax, [eax]
+    cmp word ax, 0x14c              ; is file 32 bit
+    je .32bit
+        mov eax, [ebp - 12]
+        add eax, 240                ; end of optional header, start of section headers
 
-    push dword [ebp - 4]                ; file handle as arg
-    add eax, 0x3c
-    xor ecx, ecx
-    mov ecx, [eax]                      ; e_lfanew in ecx
-    sub cx, DOS_HEADER_BUFFER_SIZE
-    push ecx
-    call parse_dos_stub
+        mov [ebp - 20], eax         ; section headers
+        mov dword [ebp - 24], 1     ; file bitness 1 for 64 bit
 
-    push dword [ebp - 4]                ; file handle as arg
-    call parse_nt_header_signature
+        jmp .continue_32_bit
 
-    push dword [ebp - 4]                ; file handle as arg
-    mov ebx, ebp
-    sub ebx, OF_FILE_STRUCT_SIZE + DOS_HEADER_BUFFER_SIZE + NT_FILE_HEADER_BUFFER_SIZE
-    push dword ebx                      ; file header addr as arg
-    call parse_nt_header_file_header
+    .32bit:
+        mov eax, [ebp - 12]
+        add eax, 224                ; end of optional header, start of section header
 
-    cmp word [eax], 0x8664
-    je .64bit
-        push dword 0
-        jmp .continue_bitness_check
-    .64bit:
-        push dword 1
+        mov [ebp - 20], eax
+        mov dword [ebp - 24], 0     ; file bitness 0 for 32 bit
 
-.continue_bitness_check:
-    push dword [ebp - 4]
-    xor ebx, ebx
-    mov bx, [eax + 16]
-    push ebx
+.continue_32_bit:
+    ; loop section headers
 
-    mov ebx, ebp
-    sub ebx, OF_FILE_STRUCT_SIZE + DOS_HEADER_BUFFER_SIZE + NT_FILE_HEADER_BUFFER_SIZE + OPTIONAL_HEADER_BUFFER_SIZE
-    push dword ebx                      ; optional header addr as arg
+    push dword [ebp - 16]           ; section header count
+    push dword [ebp - 20]           ; section headers
+    call loop_section_headers
 
-    call parse_nt_header_optional_header
+.idt:
+    ; loop IDT
+    mov eax, [ebp - 12]             ; optional header
+
+    cmp dword [ebp - 24], 0         ; is file 32 bit
+    je .32bitidt
+        add eax, 120                ; IDT
+        mov eax, [eax]
+
+        cmp eax, 0                  ; if IDT rva == 0 ?
+
+        je .edt
+        jmp .continue_bitcheck_idt
+
+    .32bitidt:
+        add eax, 104                ; IDT
+        mov eax, [eax]
+
+        cmp eax, 0                  ; if IDT rva == 0 ?
+
+        je .edt
+
+.continue_bitcheck_idt:
+    push dword [ebp + 8]                ; base addr
+    push dword [ebp - 16]               ; section header count
+    push dword [ebp - 20]               ; section headers
+    push eax                            ; IDT rva
+    call loop_import_descriptor_table
+
+.edt:
+    ; loop EDT
+    mov eax, [ebp - 12]             ; optional header
+
+    cmp dword [ebp - 24], 0         ; is file 32 bit
+    je .32bitedt
+        add eax, 112                ; EDT
+        mov eax, [eax]
+
+        cmp eax, 0                  ; if EDT rva == 0 ?
+
+        je .shutdown
+        jmp .continue_bitcheck_edt
+
+    .32bitedt:
+        add eax, 96                 ; EDT
+        mov eax, [eax]
+
+        cmp eax, 0                  ; if EDT rva == 0 ?
+
+        je .shutdown
+
+.continue_bitcheck_edt:
+    push dword [ebp + 8]                ; base addr
+    push dword [ebp - 16]               ; section header count
+    push dword [ebp - 20]               ; section headers
+    push eax                            ; EDT rva
+    call loop_export_descriptor_table
 
 .shutdown:
-    push dword [ebp - 4]                ; file handle as arg
-    call _CloseHandle@4
-
-    add esp, OF_FILE_STRUCT_SIZE + DOS_HEADER_BUFFER_SIZE + NT_FILE_HEADER_BUFFER_SIZE + OPTIONAL_HEADER_BUFFER_SIZE              ; free local variable space
-
-    add esp, 8                          ; free arg stack
+    add esp, 24                     ; free local variable space
 
     leave
     ret
-
 
 ; arg0: argc        [ebp + 8]
 ; arg1: *argv[]     [ebp + 12]
 _parse_pe:
     push ebp
     mov ebp, esp
+    ; [ebp - OF_FILE_STRUCT_SIZE] = OFFILESTRUCT
+    ; [ebp - OF_FILE_STRUCT_SIZE - 4] = file handle
+    ; [ebp - OF_FILE_STRUCT_SIZE - 8] = getfilesize high order dw of file size
+    ; [ebp - OF_FILE_STRUCT_SIZE - 12] = getfilesize low order dw of file size
+    ; [ebp - OF_FILE_STRUCT_SIZE - 16] = allocated mem for input file read
+    ; [ebp - OF_FILE_STRUCT_SIZE - 20] = return code
+    sub esp, OF_FILE_STRUCT_SIZE + 20       ; allocate local variable space
 
-    cmp byte [ebp + 8], 3               ; argc == 3 ?
+    mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 0
 
-    je .continue1
+    cmp byte [ebp + 8], 3                   ; argc == 3 ?
+    je .continue_argc_check
         push ret_val_1_str.len
         push ret_val_1_str
         call print_string
-        add esp, 8                      ; free print_string arg stack
 
-        mov eax, 1
-        
-        add esp, 8                      ; free arg stack
+        call _GetLastError@0
 
-        leave
-        ret
+        mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 1
 
-    .continue1:
-        xor edx, edx
-        mov edx, [ebp + 12]             ; argv in edx
-        mov edx, [edx + 4]              ; argv[1] in edx
+        jmp .shutdown
 
-        push edx
-        call _PathFileExistsA@4
+.continue_argc_check:
+    mov edx, [ebp + 12]                     ; argv in edx
+    mov edx, [edx + 4]                      ; argv[1] in edx
 
-        cmp eax, 1                      ; does file exist ?
-        je .continue2
+    push edx
+    call _PathFileExistsA@4
+
+    cmp eax, 1                              ; does file exist
+    je .continue_path_file_check
         push ret_val_2_str.len
         push ret_val_2_str
         call print_string
 
-        mov eax, 2
+        call _GetLastError@0
 
-        add esp, 8                      ; free arg stack
+        mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 2
 
-        leave
-        ret
+        jmp .shutdown
 
-    .continue2:
+.continue_path_file_check:
+    push 0
 
-        xor edx, edx
-        mov edx, [ebp + 12]             ; argv in edx
+    mov edx, esp
+    sub edx, OF_FILE_STRUCT_SIZE
+    push edx
 
-        add edx, 8                      ; command line Options in edx
-        mov edx, [edx]
-        push edx
+    mov edx, [ebp + 12]                             ; argv
+    add edx, 4                                      ; argv + 1
+    push dword [edx]                                ; argv[1]
 
-        mov edx, [ebp + 12]             ; argv in edx
-        add edx, 4                      ; command line FileName in edx
-        mov edx, [edx]
-        push edx
+    call _OpenFile@12                               ; file handle in eax
 
-        call parse_pe
+    cmp eax, INVALID_HANDLE_VALUE
+    jne .continue_open_file
+        push ret_val_3_open_file_str.len
+        push ret_val_3_open_file_str
+        call print_string
 
-        xor eax, eax
+        call _GetLastError@0
 
-        add esp, 8                      ; free arg stack
+        mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 3
 
-        leave
-        ret
+        jmp .shutdown
+
+.continue_open_file:
+    mov [ebp - OF_FILE_STRUCT_SIZE - 4], eax        ; file handle
+
+    mov edx, ebp
+    sub edx, OF_FILE_STRUCT_SIZE + 8
+    push edx
+
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 4]
+    call _GetFileSize@8                             ; file size in eax
+
+    cmp eax, INVALID_FILE_SIZE
+    jne .continue_get_file_size
+        push ret_val_4_get_file_size_str.len
+        push ret_val_4_get_file_size_str
+        call print_string
+
+        call _GetLastError@0
+
+        mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 4
+
+        jmp .shutdown
+
+.continue_get_file_size:
+    mov [ebp - OF_FILE_STRUCT_SIZE - 12], eax       ; file size saved
+
+    mov edx, PAGE_READWRITE
+    push edx
+
+    mov edx, MEM_RESERVE
+    or edx, MEM_COMMIT
+    push edx
+
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 12]     ; file size
+    push 0
+    call _VirtualAlloc@16
+
+    cmp eax, 0                                      ; if addr is 0
+    jne .continue_virtual_alloc
+        push ret_val_5_virtual_alloc_str.len
+        push ret_val_5_virtual_alloc_str
+        call print_string
+        
+        call _GetLastError@0
+
+        mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 5
+
+        jmp .shutdown
+
+.continue_virtual_alloc:
+    mov dword [ebp - OF_FILE_STRUCT_SIZE - 16], eax ; alloced mem saved
+
+    push 0
+    push 0
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 12]     ; file size
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 16]     ; alloced mem
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 4]      ; file handle
+    call _ReadFile@20
+
+    cmp eax, 0                                      ; 1: successful read
+    jne .continue_read_file
+        push ret_val_6_read_file_str.len
+        push ret_val_6_read_file_str
+        call print_string
+
+        call _GetLastError@0
+
+        mov dword [ebp - OF_FILE_STRUCT_SIZE - 20], 6
+
+        jmp .shutdown
+
+.continue_read_file:
+    mov edx, [ebp + 12]                             ; argv
+    add edx, 8                                      ; command line Options
+    push edx
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 16]     ; alloced mem
+    call parse_pe
+
+.shutdown:
+    push MEM_RELEASE
+    push 0
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 16]     ; alloced mem
+    call _VirtualFree@12
+
+    push dword [ebp - OF_FILE_STRUCT_SIZE - 4]      ; file handle
+    call _CloseHandle@4
+
+    add esp, OF_FILE_STRUCT_SIZE + 20               ; free local variable space    
+    add esp, 8                                      ; free arg stack
+
+    mov eax, [ebp - OF_FILE_STRUCT_SIZE - 20]       ; return code
+
+    leave
+    ret
 
 
 section .data
@@ -367,26 +464,20 @@ section .data
 ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0
 .len equ $ - ret_val_1_str
 
-ret_val_2_str: db 'ERR: Input file not exist', 0
+ret_val_2_str: db 'ERR: Input file does not exist', 0
 .len equ $ - ret_val_2_str
 
-ret_val_3_str: db 'Could not open file for reading', 0
-.len equ $ - ret_val_3_str
+ret_val_3_open_file_str: db 'OpenFile failed', 0
+.len equ $ - ret_val_3_open_file_str
 
-ret_val_4_dos_header_str: db 'ERR: ReadFile failed, DOS Header', 0
-.len equ $ - ret_val_4_dos_header_str
+ret_val_4_get_file_size_str: db 'GetFileSize failed', 0
+.len equ $ - ret_val_4_get_file_size_str
 
-ret_val_5_dos_stub_str: db 'ERR: ReadFile failed, DOS stub', 0
-.len equ $ - ret_val_5_dos_stub_str
+ret_val_5_virtual_alloc_str: db 'VirtualAlloc failed', 0
+.len equ $ - ret_val_5_virtual_alloc_str
 
-ret_val_6_nt_header_signature_str: db 'ERR: ReadFile failed, NT Signature', 0
-.len equ $ - ret_val_6_nt_header_signature_str
-
-ret_val_7_nt_header_file_header_str: db 'ERR: ReadFile failed, NT File Header', 0
-.len equ $ - ret_val_7_nt_header_file_header_str
-
-ret_val_8_nt_header_optional_header_str: db 'ERR: ReadFile failed, NT Optional Header', 0
-.len equ $ - ret_val_8_nt_header_optional_header_str
+ret_val_6_read_file_str: db 'ERR: ReadFile failed', 0
+.len equ $ - ret_val_6_read_file_str
 
 dos_header_arg: db '--dos-header', 0
 .len equ $ - dos_header_arg
@@ -406,9 +497,19 @@ import_address_table_arg: db '--import-address-table', 0
 export_address_table_arg: db '--export-address-table', 0
 .len equ $ - export_address_table_arg
 
+INVALID_FILE_SIZE equ -1
 OF_READ equ 0
 OF_FILE_STRUCT_SIZE equ 144
 DOS_HEADER_BUFFER_SIZE equ 64
-NT_FILE_HEADER_BUFFER_SIZE equ 32   ; 20 + 12 bytes padding to make it divisible by 16
-OPTIONAL_HEADER_BUFFER_SIZE equ 256 ; 224 bytes / 240 bytes is required for 32 bit / 64 bit, padding bytes to make it divisible by 16
-SECTION_HEADERS_BUFFER_SIZE equ 1000    ; 40 bytes per section header, 1000 will hold 25 sections
+NT_FILE_HEADER_BUFFER_SIZE equ 20
+OPTIONAL_HEADER_BUFFER_SIZE equ 240 ; 224 bytes 32bit / 240 bytes 64bit
+
+; Virtual Alloc
+MEM_COMMIT equ 0x00001000
+MEM_RESERVE equ 0x00002000
+
+PAGE_READWRITE equ 0x04
+PAGE_EXECUTE_READWRITE equ 0x40
+
+; Virtual Free
+MEM_RELEASE equ 0x00008000
