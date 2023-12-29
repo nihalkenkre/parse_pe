@@ -208,7 +208,7 @@ parse_pe:
     mov rbx, [rbp + 16]             ; base addr
     add rbx, 0x3c                   ; offset of e_lfanew
 int3
-    movzx rax, word [rbx]           ; e_lfanew in rax
+    movzx eax, word [rbx]           ; e_lfanew in rax
 
     mov rbx, [rbp + 16]             ; base addr
     add rbx, rax                    ; nt headers
@@ -222,16 +222,16 @@ int3
     mov [rbp - 24], rbx             ; optional header saved
 
     mov rax, [rbp - 24]             ; optional header in rax
-    movzx rbx, word [rax]                   ; magic in rbx
+    movzx ebx, word [rax]                   ; magic in rbx
     mov ebx, dword [rax + 16]              ; entry point in rbx
 
     mov rbx, [rbp - 16]             ; file header in rbx
     add rbx, 2
-    movzx rax, word [rbx]
+    movzx eax, word [rbx]
     mov [rbp - 32], rax             ; section header count saved
 
     mov rbx, [rbp - 16]             ; file header in rbx
-    movzx rbx, word [rbx]
+    movzx ebx, word [rbx]
 
     cmp rbx, 0x14c                   ; is file 32 bit
     je .32bit
