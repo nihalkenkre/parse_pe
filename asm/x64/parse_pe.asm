@@ -207,9 +207,8 @@ parse_pe:
     ; retrive and  save the information to the above stack variables
     mov rbx, [rbp + 16]             ; base addr
     add rbx, 0x3c                   ; offset of e_lfanew
-
-    xor rax, rax
-    mov word ax, [rbx]              ; e_lfanew in rax
+int3
+    movzx rax, word [rbx]           ; e_lfanew in rax
 
     mov rbx, [rbp + 16]             ; base addr
     add rbx, rax                    ; nt headers
@@ -222,22 +221,19 @@ parse_pe:
     add rbx, 20                     ; optional header
     mov [rbp - 24], rbx             ; optional header saved
 
-    xor rax, rax
-    xor rbx, rbx
     mov rax, [rbp - 24]             ; optional header in rax
-    mov bx, [rax]                   ; magic in rbx
-    mov bx, [rax + 16]              ; entry point in rbx
+    movzx rbx, word [rax]                   ; magic in rbx
+    mov ebx, dword [rax + 16]              ; entry point in rbx
 
     mov rbx, [rbp - 16]             ; file header in rbx
     add rbx, 2
-    xor rax, rax
-    mov ax, [rbx]
+    movzx rax, word [rbx]
     mov [rbp - 32], rax             ; section header count saved
 
     mov rbx, [rbp - 16]             ; file header in rbx
-    mov bx, [rbx]
+    movzx rbx, word [rbx]
 
-    cmp bx, 0x14c                   ; is file 32 bit
+    cmp rbx, 0x14c                   ; is file 32 bit
     je .32bit
         mov rax, [rbp - 24]         ; optional header in rax
         add rax, 240                ; end of optional header
@@ -274,7 +270,7 @@ parse_pe:
         cmp eax, 0                  ; if IDT rva == 0 ?
         je .edt
 
-        jmp .continue_bitcheck_iat
+        jmp .continue_bitcheck_idt
 
 .32bitidt:
     add rax, 104                    ; IDT
@@ -294,7 +290,6 @@ parse_pe:
 
 .edt:
     ; loop EDT
-    int3
     mov rax, [rbp - 24]             ; optional header
     cmp qword [rbp - 48], 0         ; is file 32 bit
 
@@ -369,7 +364,6 @@ _parse_pe:
         jmp .shutdown
 
     .continue_argc_check:
-        xor rdx, rdx
         mov rdx, [rbp + 24]         ; argv in rdx
         mov rdx, [rdx + 8]          ; argv[1] in rdx
 
@@ -396,7 +390,6 @@ _parse_pe:
 
     .continue_path_file_check:
 
-        xor rdx, rdx
         mov rdx, [rbp + 24]         ; argv in rdx
         add rdx, 8                  ; command line FileName in rdx
         mov rcx, [rdx]

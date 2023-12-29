@@ -183,9 +183,7 @@ parse_pe:
     ; retrive and  save the information to the above stack variables
     mov ebx, [ebp + 8]              ; base addr
     add ebx, 0x3c                   ; offset of e_lfanew
-
-    xor eax, eax
-    mov ax, [ebx]                   ; e_lfanew
+    movzx eax, word [ebx]                   ; e_lfanew
 
     mov ebx, [ebp + 8]
     add ebx, eax                    ; nt headers
@@ -194,9 +192,8 @@ parse_pe:
     add ebx, 4                      ; file header
     mov [ebp - 8], ebx              ; file header saved
 
-    xor eax, eax
     add ebx, 2                      ; section header count 
-    mov ax, [ebx]
+    movzx eax, word [ebx]
     mov [ebp - 16], eax             ; section header count saved
 
     add ebx, 18                     ; optional header
