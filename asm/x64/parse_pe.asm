@@ -1,16 +1,7 @@
 section .text
 global _parse_pe
 
-%include 'utils_inc_text_64.asm'
-
-extern PathFileExistsA
-extern GetLastError
-extern OpenFile
-extern GetFileSize
-extern VirtualAlloc
-extern ReadFile
-extern VirtualFree
-extern CloseHandle
+%include '../utils/utils_64_text.asm'
 
 ; arg0: rva                     rcx
 ; arg1: section headers         rdx
@@ -339,48 +330,86 @@ _parse_pe:
     ; rbp - 168 = getfilesize high order dw of file size
     ; rbp - 176 = getfilesize low order dw of file size
     ; rbp - 184 = ptr to allocated me for file contents
-    ; rbp - 192 = 8 bytes padding
+    ; rbp - 192 = kernel handle
+    ; rbp - 200 = std handle
+    ; rbp - 208 = shlwapi addr
+    sub rsp, 208                    ; allocate local variable space
+    sub rsp, 32                     ; allocate shadow space
 
-    sub rsp, 192                    ; allocate local variable space
     mov qword [rbp - 8], 0          ; return value
+
+    call get_kernel_module_handle
+    mov [rbp - 192], rax            ; kernel handle
+
+    mov rcx, [rbp - 192]            ; kernel handle
+    call populate_kernel_function_ptrs_by_name
 
     cmp byte [rbp + 16], 3          ; argc == 3 ?
 
     je .continue_argc_check
-        lea rcx, ret_val_1_str
-        mov rdx, ret_val_1_str.len
-        sub rsp, 32
-        call print_string
-        add rsp, 32
+        mov rcx, STD_HANDLE_ENUM
+        call [get_std_handle]
 
-        sub rsp, 32
-        call GetLastError
-        add rsp, 32
-            
+        mov [rbp - 200], rax            ; std handle
+
+        mov rcx, [rbp - 200]            ; std handle
+        mov rdx, ret_val_1_str
+        mov r8, ret_val_1_str.len
+        call print_string
+
+        call [get_last_error]
+
         mov qword [rbp - 8], 1
 
         jmp .shutdown
 
     .continue_argc_check:
-        mov rdx, [rbp + 24]         ; argv in rdx
-        mov rdx, [rdx + 8]          ; argv[1] in rdx
 
-        mov rcx, rdx
-        sub rsp, 32
-        call PathFileExistsA
-        add rsp, 32
+        mov rcx, shlwapi_xor
+        mov rdx, shlwapi_xor.len
+        mov r8, xor_key
+        mov r9, xor_key.len
+        call my_xor
+
+        mov rcx, shlwapi_xor
+        call [load_library_a]
+        
+        cmp rax, 0
+        je .shutdown
+        mov [rbp - 208], rax            ; shlwapi addr
+
+        mov rcx, path_file_exists_a_xor
+        mov rdx, path_file_exists_a_xor.len
+        mov r8, xor_key
+        mov r9, xor_key.len
+        call my_xor
+
+        mov rcx, [rbp - 208]
+        mov rdx, path_file_exists_a_xor
+        call get_proc_address_by_get_proc_addr
+
+        cmp rax, 0
+        je .shutdown
+
+        mov [path_file_exists_a], rax
+
+        mov rcx, [rbp + 24]         ; argv in rcx
+        mov rcx, [rcx + 8]          ; argv[1] in rcx
+        call [path_file_exists_a]
 
         cmp eax, 1                  ; does file exist
         je .continue_path_file_check
-            lea rcx, ret_val_2_str
-            mov rdx, ret_val_2_str.len
-            sub rsp, 32
-            call print_string
-            add rsp, 32
+            mov rcx, STD_HANDLE_ENUM
+            call [get_std_handle]
 
-            sub rsp, 32
-            call GetLastError
-            add rsp, 32
+            mov [rbp - 200], rax            ; std handle
+
+            mov rcx, [rbp - 200]            ; std handle
+            mov rdx, ret_val_2_str
+            mov r8, ret_val_2_str.len
+            call print_string
+
+            call [get_last_error]
 
             mov qword [rbp - 8], 2
 
@@ -393,24 +422,24 @@ _parse_pe:
         mov rcx, [rdx]
 
         mov rdx, rsp
-        sub rdx, 152  ; addr of struct in rdx
+        sub rdx, 152                ; addr of struct in rdx
         xor r8, r8
 
-        sub rsp, 32
-        call OpenFile                 ; file handle in rax
-        add rsp, 32
+        call [open_file]                 ; file handle in rax
 
         cmp rax, INVALID_HANDLE_VALUE
         jne .continue_open_file
-            mov rcx, ret_val_3_open_file_str
-            mov rdx, ret_val_3_open_file_str.len
-            sub rsp, 32
-            call print_string
-            add rsp, 32
+            mov rcx, STD_HANDLE_ENUM
+            call [get_std_handle]
 
-            sub rsp, 32
-            call GetLastError
-            add rsp, 32
+            mov [rbp - 200], rax            ; std handle
+
+            mov rcx, [rbp - 200]            ; std handle
+            mov rdx, ret_val_3_open_file_str
+            mov r8, ret_val_3_open_file_str.len
+            call print_string
+
+            call [get_last_error]
 
             mov qword [rbp - 8], 3
 
@@ -422,21 +451,21 @@ _parse_pe:
         mov rcx, [rbp - 160]            ; file handle
         mov rdx, rbp
         sub rdx, 168                    ; file size high
-        sub rsp, 32
-        call GetFileSize                ; file size in rax
-        add rsp, 32 
+        call [get_file_size]            ; file size in rax
 
         cmp rax, INVALID_FILE_SIZE
         jne .continue_get_file_size
-            mov rcx, ret_val_4_get_file_size_str
-            mov rdx, ret_val_4_get_file_size_str.len
-            sub rsp, 32
-            call print_string
-            add rsp, 32
+            mov rcx, STD_HANDLE_ENUM
+            call [get_std_handle]
 
-            sub rsp, 32
-            call GetLastError
-            add rsp, 32
+            mov [rbp - 200], rax            ; std handle
+
+            mov rcx, [rbp - 200]            ; std handle
+            mov rdx, ret_val_4_get_file_size_str
+            mov r8, ret_val_4_get_file_size_str.len
+            call print_string
+
+            call [get_last_error]
 
             mov qword [rbp - 8], 4
 
@@ -450,21 +479,21 @@ _parse_pe:
         mov r8, MEM_COMMIT
         or r8, MEM_RESERVE
         mov r9, PAGE_READWRITE
-        sub rsp, 32
-        call VirtualAlloc                       ; allocated addr in rax
-        add rsp, 32
+        call [virtual_alloc]                       ; allocated addr in rax
 
         cmp rax, 0                              ; if addr == NULL
         jne .continue_virtual_alloc
-            mov rcx, ret_val_5_virtual_alloc_str
-            mov rdx, ret_val_5_virtual_alloc_str.len
-            sub rsp, 32
-            call print_string
-            add rsp, 32
+            mov rcx, STD_HANDLE_ENUM
+            call [get_std_handle]
 
-            sub rsp, 32
-            call GetLastError
-            add rsp, 32
+            mov [rbp - 200], rax                 ; std handle
+
+            mov rcx, [rbp - 200]                ; std handle
+            mov rdx, ret_val_5_virtual_alloc_str
+            mov r8, ret_val_5_virtual_alloc_str.len
+            call print_string
+
+            call [get_last_error]
 
             mov qword [rbp - 8], 5
 
@@ -473,26 +502,28 @@ _parse_pe:
     .continue_virtual_alloc:
         mov qword [rbp - 184], rax              ; alloc addr saved
 
-        sub rsp, 48
+        sub rsp, 16                             ; 1 arg + 8 byte padding
         mov rcx, [rbp - 160]                    ; file handle
         mov rdx, [rbp - 184]                    ; ptr to allocated mem
         mov r8, [rbp - 176]                     ; n Bytes to read
         xor r9, r9
         mov qword [rsp + 32], 0
-        call ReadFile
-        add rsp, 48
+        call [read_file]
+        add rsp, 16                             ; 1 arg + 8 byte padding
 
-        cmp rax, 1                            ; 1: successful read
+        cmp rax, 1                              ; 1: successful read
         je .continue_read_file
-            sub rsp, 32
-            lea rcx, ret_val_6_read_file_str
-            mov rdx, ret_val_6_read_file_str.len
-            call print_string
-            add rsp, 32
+            mov rcx, STD_HANDLE_ENUM
+            call [get_std_handle]
 
-            sub rsp, 32
-            call GetLastError
-            add rsp, 32
+            mov [rbp - 200], rax                 ; std handle
+
+            mov rcx, [rbp - 200]                ; std handle
+            mov rdx, ret_val_6_read_file_str
+            mov r8, ret_val_6_read_file_str.len
+            call print_string
+
+            call [get_last_error]
 
             mov qword [rbp - 8], 6
 
@@ -500,26 +531,20 @@ _parse_pe:
 
     .continue_read_file:
         
-        sub rsp, 32
         mov rcx, [rbp - 184]        ; base addr of file
         mov rdx, [rbp + 24]         ; argv in rdx
         add rdx, 16                 ; command line Options in rdx
         mov rdx, [rdx]
         call parse_pe
-        add rsp, 32
 
 .shutdown:
-    sub rsp, 32
     mov rcx, [rbp - 184]            ; ptr to file contents
     xor rdx, rdx 
     mov r8, MEM_RELEASE
-    call VirtualFree
-    add rsp, 32
+    call [virtual_free]
 
-    sub rsp, 32
     mov rcx, [rbp - 160]            ; file handle
-    call CloseHandle
-    add rsp, 32
+    call [close_handle]
 
     mov rax, [rbp - 8]       ; return code
 
@@ -527,7 +552,7 @@ _parse_pe:
     ret
 
 section .data
-%include 'utils_inc_data_64.asm'
+%include '../utils/utils_64_data.asm'
 
 ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0
 .len equ $ - ret_val_1_str
@@ -565,7 +590,14 @@ import_address_table_arg: db '--import-address-table', 0
 export_address_table_arg: db '--export-address-table', 0
 .len equ $ - export_address_table_arg
 
+shlwapi_xor: db 0x63, 0x58, 0x5c, 0x47, 0x51, 0x40, 0x59, 0x1e, 0x54, 0x5c, 0x5c, 0
+.len equ $ - shlwapi_xor - 1
 
+path_file_exists_a_xor: db 0x60, 0x51, 0x44, 0x58, 0x76, 0x59, 0x5c, 0x55, 0x75, 0x48, 0x59, 0x43, 0x44, 0x43, 0x71, 0
+.len equ $ - path_file_exists_a_xor - 1
+
+STD_HANDLE_ENUM equ -11
+INVALID_HANDLE_VALUE equ -1
 INVALID_FILE_SIZE equ -1
 OF_READ equ 0
 OF_FILE_STRUCT_SIZE equ 144
@@ -582,3 +614,7 @@ PAGE_EXECUTE_READWRITE equ 0x40
 
 ; Virtual Free
 MEM_RELEASE equ 0x00008000
+
+section .bss
+path_file_exists_a: dq ?
+%include '../utils/utils_64_bss.asm'
