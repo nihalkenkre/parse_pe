@@ -1,3 +1,0 @@
-[submodule "asm/utils"]
-	path = asm/utils
-	url = git@github.com:nihalkenkre/asm_utils.git
