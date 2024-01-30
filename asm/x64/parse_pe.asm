@@ -208,7 +208,7 @@ parse_pe:
     mov rbx, [rbp + 16]             ; base addr
     add rbx, rax                    ; nt headers
 
-    mov [rbp - 16], rbx              ; nt headers saved
+    mov [rbp - 16], rbx             ; nt headers saved
     
     add rbx, 4                      ; file header
     mov [rbp - 24], rbx             ; file header saved
@@ -344,13 +344,13 @@ _parse_pe:
     mov rcx, [rbp - 192]            ; kernel handle
     call populate_kernel_function_ptrs_by_name
 
+    mov rcx, STD_HANDLE_ENUM
+    call [get_std_handle]
+
+    mov [rbp - 200], rax            ; std handle
+   
     cmp byte [rbp + 16], 3          ; argc == 3 ?
-
     je .continue_argc_check
-        mov rcx, STD_HANDLE_ENUM
-        call [get_std_handle]
-
-        mov [rbp - 200], rax            ; std handle
 
         mov rcx, [rbp - 200]            ; std handle
         mov rdx, ret_val_1_str
@@ -384,7 +384,7 @@ _parse_pe:
         mov r9, xor_key.len
         call my_xor
 
-        mov rcx, [rbp - 208]
+        mov rcx, [rbp - 208]            ; shlwapi addr
         mov rdx, path_file_exists_a_xor
         call get_proc_address_by_get_proc_addr
 
@@ -399,11 +399,6 @@ _parse_pe:
 
         cmp eax, 1                  ; does file exist
         je .continue_path_file_check
-            mov rcx, STD_HANDLE_ENUM
-            call [get_std_handle]
-
-            mov [rbp - 200], rax            ; std handle
-
             mov rcx, [rbp - 200]            ; std handle
             mov rdx, ret_val_2_str
             mov r8, ret_val_2_str.len
@@ -429,11 +424,6 @@ _parse_pe:
 
         cmp rax, INVALID_HANDLE_VALUE
         jne .continue_open_file
-            mov rcx, STD_HANDLE_ENUM
-            call [get_std_handle]
-
-            mov [rbp - 200], rax            ; std handle
-
             mov rcx, [rbp - 200]            ; std handle
             mov rdx, ret_val_3_open_file_str
             mov r8, ret_val_3_open_file_str.len
@@ -455,11 +445,6 @@ _parse_pe:
 
         cmp rax, INVALID_FILE_SIZE
         jne .continue_get_file_size
-            mov rcx, STD_HANDLE_ENUM
-            call [get_std_handle]
-
-            mov [rbp - 200], rax            ; std handle
-
             mov rcx, [rbp - 200]            ; std handle
             mov rdx, ret_val_4_get_file_size_str
             mov r8, ret_val_4_get_file_size_str.len
@@ -479,15 +464,10 @@ _parse_pe:
         mov r8, MEM_COMMIT
         or r8, MEM_RESERVE
         mov r9, PAGE_READWRITE
-        call [virtual_alloc]                       ; allocated addr in rax
+        call [virtual_alloc]                    ; allocated addr in rax
 
         cmp rax, 0                              ; if addr == NULL
         jne .continue_virtual_alloc
-            mov rcx, STD_HANDLE_ENUM
-            call [get_std_handle]
-
-            mov [rbp - 200], rax                 ; std handle
-
             mov rcx, [rbp - 200]                ; std handle
             mov rdx, ret_val_5_virtual_alloc_str
             mov r8, ret_val_5_virtual_alloc_str.len
@@ -513,11 +493,6 @@ _parse_pe:
 
         cmp rax, 1                              ; 1: successful read
         je .continue_read_file
-            mov rcx, STD_HANDLE_ENUM
-            call [get_std_handle]
-
-            mov [rbp - 200], rax                 ; std handle
-
             mov rcx, [rbp - 200]                ; std handle
             mov rdx, ret_val_6_read_file_str
             mov r8, ret_val_6_read_file_str.len

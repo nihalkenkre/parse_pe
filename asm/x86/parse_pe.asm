@@ -1,16 +1,7 @@
 section .text
 global _parse_pe
 
-%include 'utils_inc_text_32.asm'
-
-extern _PathFileExistsA@4
-extern _GetLastError@0
-extern _OpenFile@12
-extern _GetFileSize@8
-extern _VirtualAlloc@16
-extern _ReadFile@20
-extern _VirtualFree@12
-extern _CloseHandle@4
+%include '../utils/utils_32_text.asm'
 
 ; arg0: rva                         [ebp + 8]
 ; arg1: section headers             [ebp + 12]
@@ -312,36 +303,82 @@ _parse_pe:
     ; ebp - 156 = getfilesize high order dw of file size
     ; ebp - 160 = getfilesize low order dw of file size
     ; ebp - 164 = allocated mem for input file read
-    sub esp, 164                            ; allocate local variable space
+    ; ebp - 168 = kernel handle
+    ; ebp - 172 = std handle
+    ; ebp - 176 = shlwapi addr
+    sub esp, 176                            ; allocate local variable space
 
     mov dword [ebp - 4], 0                  ; return value
+
+    call get_kernel_module_handle
+    mov [ebp - 168], eax                    ; kernel handle
+
+    push dword [ebp - 168]                  ; kernel handle
+    call populate_kernel_function_ptrs_by_name
+
+    push STD_HANDLE_ENUM
+    call [get_std_handle]
+
+    mov [ebp - 172], eax                    ; std handle
 
     cmp byte [ebp + 8], 3                   ; argc == 3 ?
     je .continue_argc_check
         push ret_val_1_str.len
         push ret_val_1_str
+        push dword [ebp - 172]              ; std handle
         call print_string
 
-        call _GetLastError@0
+        call [get_last_error]
 
         mov dword [ebp - 4], 1
 
         jmp .shutdown
 
 .continue_argc_check:
+
+    push xor_key.len
+    push xor_key
+    push shlwapi_xor.len
+    push shlwapi_xor
+    call my_xor
+
+    push shlwapi_xor
+    call [load_library_a]
+
+    cmp eax, 0
+    je .shutdown
+
+    mov [ebp - 176], eax                    ; shlwapi addr
+
+    push xor_key.len
+    push xor_key
+    push path_file_exists_a_xor.len
+    push path_file_exists_a_xor
+    call my_xor
+
+    push path_file_exists_a_xor
+    push dword [ebp - 176]                  ; shlwapi addr
+    call get_proc_address_by_get_proc_addr
+
+    cmp eax, 0
+    je .shutdown
+
+    mov [path_file_exists_a], eax
+
     mov edx, [ebp + 12]                     ; argv in edx
     mov edx, [edx + 4]                      ; argv[1] in edx
 
     push edx
-    call _PathFileExistsA@4
+    call [path_file_exists_a]
 
     cmp eax, 1                              ; does file exist
     je .continue_path_file_check
         push ret_val_2_str.len
         push ret_val_2_str
+        push dword [ebp - 172]              ; std handle
         call print_string
 
-        call _GetLastError@0
+        call [get_last_error]
 
         mov dword [ebp - 4], 2
 
@@ -358,15 +395,16 @@ _parse_pe:
     add edx, 4                                      ; argv + 1
     push dword [edx]                                ; argv[1]
 
-    call _OpenFile@12                               ; file handle in eax
+    call [open_file]                                ; file handle in eax
 
     cmp eax, INVALID_HANDLE_VALUE
     jne .continue_open_file
         push ret_val_3_open_file_str.len
         push ret_val_3_open_file_str
+        push dword [ebp - 172]              ; std handle
         call print_string
 
-        call _GetLastError@0
+        call [get_last_error]
 
         mov dword [ebp - 4], 3
 
@@ -380,15 +418,16 @@ _parse_pe:
     push edx
 
     push dword [ebp - 152]
-    call _GetFileSize@8                             ; file size in eax
+    call [get_file_size]                             ; file size in eax
 
     cmp eax, INVALID_FILE_SIZE
     jne .continue_get_file_size
         push ret_val_4_get_file_size_str.len
         push ret_val_4_get_file_size_str
+        push dword [ebp - 172]              ; std handle
         call print_string
 
-        call _GetLastError@0
+        call [get_last_error]
 
         mov dword [ebp - 4], 4
 
@@ -406,15 +445,16 @@ _parse_pe:
 
     push dword [ebp - 160]     ; file size
     push 0
-    call _VirtualAlloc@16
+    call [virtual_alloc]
 
     cmp eax, 0                                      ; if addr is 0
     jne .continue_virtual_alloc
         push ret_val_5_virtual_alloc_str.len
         push ret_val_5_virtual_alloc_str
+        push dword [ebp - 172]              ; std handle
         call print_string
         
-        call _GetLastError@0
+        call [get_last_error]
 
         mov dword [ebp - 4], 5
 
@@ -427,16 +467,17 @@ _parse_pe:
     push 0
     push dword [ebp - 160]     ; file size
     push dword [ebp - 164]     ; alloced mem
-    push dword [ebp - 152]      ; file handle
-    call _ReadFile@20
+    push dword [ebp - 152]     ; file handle
+    call [read_file]
 
     cmp eax, 0                                      ; 1: successful read
     jne .continue_read_file
         push ret_val_6_read_file_str.len
         push ret_val_6_read_file_str
+        push dword [ebp - 172]              ; std handle
         call print_string
 
-        call _GetLastError@0
+        call [get_last_error]
 
         mov dword [ebp - 4], 6
 
@@ -453,10 +494,10 @@ _parse_pe:
     push MEM_RELEASE
     push 0
     push dword [ebp - 164]     ; alloced mem
-    call _VirtualFree@12
+    call [virtual_free]
 
     push dword [ebp - 152]      ; file handle
-    call _CloseHandle@4
+    call [close_handle]
 
     mov eax, [ebp - 4]       ; return code
 
@@ -465,7 +506,7 @@ _parse_pe:
 
 
 section .data
-%include 'utils_inc_data_32.asm'
+%include '../utils/utils_32_data.asm'
 
 ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0
 .len equ $ - ret_val_1_str
@@ -503,6 +544,14 @@ import_address_table_arg: db '--import-address-table', 0
 export_address_table_arg: db '--export-address-table', 0
 .len equ $ - export_address_table_arg
 
+shlwapi_xor: db 0x63, 0x58, 0x5c, 0x47, 0x51, 0x40, 0x59, 0x1e, 0x54, 0x5c, 0x5c, 0
+.len equ $ - shlwapi_xor - 1
+
+path_file_exists_a_xor: db 0x60, 0x51, 0x44, 0x58, 0x76, 0x59, 0x5c, 0x55, 0x75, 0x48, 0x59, 0x43, 0x44, 0x43, 0x71, 0
+.len equ $ - path_file_exists_a_xor - 1
+
+STD_HANDLE_ENUM equ -11
+INVALID_HANDLE_VALUE equ -1
 INVALID_FILE_SIZE equ -1
 OF_READ equ 0
 OF_FILE_STRUCT_SIZE equ 144
@@ -519,3 +568,7 @@ PAGE_EXECUTE_READWRITE equ 0x40
 
 ; Virtual Free
 MEM_RELEASE equ 0x00008000
+
+section .bss
+path_file_exists_a: dd ?
+%include '../utils/utils_32_bss.asm'
