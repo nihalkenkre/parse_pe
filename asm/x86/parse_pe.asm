@@ -177,11 +177,123 @@ parse_pe:
     ; ebp - 20 = section header count
     ; ebp - 24 = section headers
     ; ebp - 28 = file bitness 1: 64 bit, 0: 32 bit
-    sub esp, 28                     ; allocate local variable space
-
+    ; ebp - 32 = ebx
+    ; ebp - 36 = options enum;  1 = dos header, 2 = dos stub, 3 = signature
+    ;                           4 = file header, 5 = optional header, 6 = section header
+    ;                           7 = export directory, 8 = import directory
+    sub esp, 36                     ; allocate local variable space
     mov dword [ebp - 4], 0          ; return value
+    mov [ebp - 32], ebx             ; save ebx
 
-    ; retrive and  save the information to the above stack variables
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push dos_header_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_dos_stub
+
+    mov dword [ebp - 36], 1         ; dos header
+    jmp .cmp_end
+
+.cmp_dos_stub:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push dos_stub_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_nt_headers_signature
+
+    mov dword [ebp - 36], 2         ; dos stub
+    jmp .cmp_end
+
+.cmp_nt_headers_signature:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push nt_headers_signature_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_nt_headers_file_header
+
+    mov dword [ebp - 36], 3         ; dos stub
+    jmp .cmp_end
+
+.cmp_nt_headers_file_header:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push nt_headers_file_header_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_nt_headers_optional_header
+
+    mov dword [ebp - 36], 4         ; file header
+    jmp .cmp_end
+
+.cmp_nt_headers_optional_header:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push nt_headers_optional_header_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_section_headers
+
+    mov dword [ebp - 36], 5         ; optional header
+    jmp .cmp_end
+
+.cmp_section_headers:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push section_headers_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_export_functions
+
+    mov dword [ebp - 36], 6         ; section headers
+    jmp .cmp_end
+
+.cmp_export_functions:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push export_functions_arg
+    call strcmpAA
+    cmp eax, 0
+    je .cmp_import_functions
+
+    mov dword [ebp - 36], 7         ; export directory
+    jmp .cmp_end
+
+.cmp_import_functions:
+    mov eax, [ebp + 12]
+    mov eax, [eax]
+    push eax                        ; Options
+    push import_functions_arg
+    call strcmpAA
+    cmp eax, 0
+    je .options_arg_err
+
+    mov dword [ebp - 36], 8         ; import directory
+
+.options_arg_err:
+
+    push STD_HANDLE_ENUM
+    call [get_std_handle]
+    
+    push options_err_str.len
+    push options_err_str
+    push eax
+    call print_string
+
+    jmp .shutdown
+
+.cmp_end:
+
+    ; retrive and save the information
     mov ebx, [ebp + 8]              ; base addr
     add ebx, 0x3c                   ; offset of e_lfanew
     movzx eax, word [ebx]           ; e_lfanew
@@ -287,6 +399,7 @@ parse_pe:
 .shutdown:
 
     mov eax, [ebp - 4]                  ; return value
+    mov ebx, [ebp - 32]                 ; restore ebx
 
     leave
     ret 8
@@ -532,23 +645,38 @@ dos_header_arg: db '--dos-header', 0
 dos_stub_arg: db '--dos-stub', 0
 .len equ $ - dos_stub_arg
 
-nt_headers_arg: db '--nt-headers', 0
-.len equ $ - nt_headers_arg
+nt_headers_signature_arg: db '--nt-headers-signature', 0
+.len equ $ - nt_headers_signature_arg
+
+nt_headers_file_header_arg: db '--nt-headers-file-header', 0
+.len equ $ - nt_headers_file_header_arg
+
+nt_headers_optional_header_arg: db '--nt-headers-optional-header', 0
+.len equ $ - nt_headers_optional_header_arg
 
 section_headers_arg: db '--section-headers', 0
 .len equ $ - section_headers_arg
 
-import_address_table_arg: db '--import-address-table', 0
-.len equ $ - import_address_table_arg
+import_functions_arg: db '--import-functions', 0
+.len equ $ - import_functions_arg
 
-export_address_table_arg: db '--export-address-table', 0
-.len equ $ - export_address_table_arg
+export_functions_arg: db '--export-functions', 0
+.len equ $ - export_functions_arg
+
+options_err_str: db 'Please pass one of the following options', 0xa, '--dos-header, --dos-stub, --nt-headers-signature, --nt-headers-file-header, --nt-headers-optional-header, --section-headers, --import-functions, --export-functions', 0xa, 0
+.len equ $ - options_err_str
 
 shlwapi_xor: db 0x63, 0x58, 0x5c, 0x47, 0x51, 0x40, 0x59, 0x1e, 0x54, 0x5c, 0x5c, 0
 .len equ $ - shlwapi_xor - 1
 
 path_file_exists_a_xor: db 0x60, 0x51, 0x44, 0x58, 0x76, 0x59, 0x5c, 0x55, 0x75, 0x48, 0x59, 0x43, 0x44, 0x43, 0x71, 0
 .len equ $ - path_file_exists_a_xor - 1
+
+dos_header_str: db '            DOS Header\n Magic Number : %x\n Bytes on Last Page: 0x%x\n', 0
+.len equ $ - dos_header_str
+
+dos_stub_str: db '', 0
+
 
 STD_HANDLE_ENUM equ -11
 INVALID_HANDLE_VALUE equ -1
