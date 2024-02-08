@@ -487,6 +487,49 @@ print_nt_headers_optional_header:
     leave
     ret 12
 
+; arg0: ptr to section headers      [ebp + 8]
+; arg1: sprintf buffer              [ebp + 12]
+; arg2: std handle                  [ebp + 16]
+print_section_headers:
+    push ebp
+    mov ebp, esp
+
+    ; ebp - 4 = return value
+    sub esp, 4                      ; allocate local variable space
+
+    mov dword [ebp - 4], 0          ; return value
+
+    mov eax, [ebp + 8]              ; section headers
+
+    push dword [eax + 40]
+    push dword [eax + 36]
+    push dword [eax + 34]
+    push dword [eax + 32]
+    push dword [eax + 28]
+    push dword [eax + 24]
+    push dword [eax + 20]
+    push dword [eax + 16]
+    push dword [eax + 12]
+    push dword [eax + 8]
+    push dword eax
+    push section_headers_str
+    push dword [ebp + 12]           ; sprintf buffer
+    call sprintf
+
+    push dword [ebp + 12]           ; sprintf buffer
+    call strlen
+
+    push eax                        ; strlen
+    push dword [ebp + 12]           ; sprintf buffer 
+    push dword [ebp + 16]           ; std handle
+    call print_string
+
+.shutdown:
+    mov eax, [ebp - 4]              ; return value
+    
+    leave
+    ret 12
+
 ; arg0: base addr file contents     [ebp + 8]
 ; arg1: Options                     [ebp + 12]
 ; arg2: std handle                  [ebp + 16]
@@ -711,6 +754,19 @@ parse_pe:
         mov dword [ebp - 24], 0                     ; file bitness 0 for 32 bit
 
 .continue_32_bit:
+
+    cmp dword [ebp - 36], 6                         ; print section headers
+    jne .continue_from_section_header_check
+
+    push dword [ebp + 16]                           ; std handle
+    mov eax, ebp
+    sub eax, 8228                                   ; sprintf buffer
+    push eax
+    push dword [ebp - 24]                           ; section headers
+    call print_section_headers
+
+.continue_from_section_header_check:
+
     ; loop section headers
 
     push dword [ebp - 20]                           ; section header count
@@ -1186,6 +1242,19 @@ nt_headers_optional_header_64_str: db '        NT Headers Optional Header', 0xa,
                                     'Delay Load Import Descr    : RVA 0x%xd Size 0x%xd', 0xa, \
                                     '.NET Header                : RVA 0x%xd Size 0x%xd', 0
 .len equ $ - nt_headers_optional_header_64_str
+
+section_headers_str: db '       Section Headers', 0xa, \
+                        'Name                   : %s', 0xa, \
+                        'Virtual Size           : 0x%xd', 0xa, \
+                        'Virtual Addr           : 0x%xd', 0xa, \
+                        'Raw Data Size          : 0x%xd', 0xa, \
+                        'Raw Data Pointer       : 0x%xd', 0xa, \
+                        'Reloc Pointer          : 0x%xd', 0xa, \
+                        'Line Numbers Pointer   : 0x%xd', 0xa, \
+                        'Relocs Count           : 0x%xd', 0xa, \
+                        'Line Numbers Count     : 0x%xd', 0xa, \
+                        'Characteristics        : 0x%xd', 0
+.len equ $ - section_headers_str
 
 STD_HANDLE_ENUM equ -11
 INVALID_HANDLE_VALUE equ -1
