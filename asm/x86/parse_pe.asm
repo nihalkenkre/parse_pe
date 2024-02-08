@@ -303,6 +303,180 @@ print_nt_headers_file_header:
     leave
     ret 12
 
+; arg0: ptr to nt header optional header    [ebp + 8]
+; arg1: sprintf buffer                      [ebp + 12]
+; arg2: std handle                          [ebp + 16]
+print_nt_headers_optional_header:
+    push ebp
+    mov ebp, esp
+
+    ; ebp - 4 = return value
+    sub esp, 4                      ; allocate local variable space
+
+    mov dword [ebp - 4], 0          ; return value
+
+    mov eax, [ebp + 8]              ; nt headers optional header
+
+    cmp word [eax], 0x20b                ; is pe 64 bit ?
+    je .64bitOptionalHeader
+
+    ; 32 bit optional header
+    push dword [eax + 224]
+    push dword [eax + 220]
+    push dword [eax + 216]
+    push dword [eax + 212]
+    push dword [eax + 208]
+    push dword [eax + 204]
+    push dword [eax + 200]
+    push dword [eax + 196]
+    push dword [eax + 192]
+    push dword [eax + 188]
+    push dword [eax + 184]
+    push dword [eax + 180]
+    push dword [eax + 176]
+    push dword [eax + 172]
+    push dword [eax + 168]
+    push dword [eax + 164]
+    push dword [eax + 160]
+    push dword [eax + 156]
+    push dword [eax + 152]
+    push dword [eax + 148]
+    push dword [eax + 144]
+    push dword [eax + 140]
+    push dword [eax + 136]
+    push dword [eax + 132]
+    push dword [eax + 128]
+    push dword [eax + 124]
+    push dword [eax + 120]
+    push dword [eax + 116]
+    push dword [eax + 112]
+    push dword [eax + 108]
+    push dword [eax + 104]
+    push dword [eax + 100]
+    push dword [eax + 96]
+    push dword [eax + 92]
+    push dword [eax + 88]
+    push dword [eax + 84]
+    push dword [eax + 80]
+    push dword [eax + 76]
+    push dword [eax + 72]
+    push dword [eax + 70]
+    push dword [eax + 68]
+    push dword [eax + 64]
+    push dword [eax + 60]
+    push dword [eax + 56]
+    push dword [eax + 52]
+    push dword [eax + 50]
+    push dword [eax + 48]
+    push dword [eax + 46]
+    push dword [eax + 44]
+    push dword [eax + 42]
+    push dword [eax + 40]
+    push dword [eax + 36]
+    push dword [eax + 32]
+    push dword [eax + 28]
+    push dword [eax + 24]
+    push dword [eax + 20]
+    push dword [eax + 16]
+    push dword [eax + 12]
+    push dword [eax + 8]
+    push dword [eax + 4]
+    push dword [eax + 3]
+    push dword [eax + 2]
+    push dword [eax] 
+    push nt_headers_optional_header_32_str
+    jmp .continue_after_push
+
+.64bitOptionalHeader:
+    push dword [eax + 244]
+    push dword [eax + 240]
+    push dword [eax + 236]
+    push dword [eax + 232]
+    push dword [eax + 228]
+    push dword [eax + 224]
+    push dword [eax + 220]
+    push dword [eax + 216]
+    push dword [eax + 212]
+    push dword [eax + 208]
+    push dword [eax + 204]
+    push dword [eax + 200]
+    push dword [eax + 196]
+    push dword [eax + 192]
+    push dword [eax + 188]
+    push dword [eax + 184]
+    push dword [eax + 180]
+    push dword [eax + 176]
+    push dword [eax + 172]
+    push dword [eax + 168]
+    push dword [eax + 164]
+    push dword [eax + 160]
+    push dword [eax + 156]
+    push dword [eax + 152]
+    push dword [eax + 148]
+    push dword [eax + 144]
+    push dword [eax + 140]
+    push dword [eax + 136]
+    push dword [eax + 132]
+    push dword [eax + 128]
+    push dword [eax + 124]
+    push dword [eax + 120]
+    push dword [eax + 116]
+    push dword [eax + 112]
+    push dword [eax + 108]
+    push dword [eax + 104]
+    push dword [eax + 96]
+    push dword [eax + 100]
+    push dword [eax + 88]
+    push dword [eax + 92]
+    push dword [eax + 80]
+    push dword [eax + 84]
+    push dword [eax + 72]
+    push dword [eax + 76]
+    push dword [eax + 70]
+    push dword [eax + 68]
+    push dword [eax + 64]
+    push dword [eax + 60]
+    push dword [eax + 56]
+    push dword [eax + 52]
+    push dword [eax + 50]
+    push dword [eax + 48]
+    push dword [eax + 46]
+    push dword [eax + 44]
+    push dword [eax + 42]
+    push dword [eax + 40]
+    push dword [eax + 36]
+    push dword [eax + 32]
+    push dword [eax + 24]
+    push dword [eax + 28]
+    push dword [eax + 20]
+    push dword [eax + 16]
+    push dword [eax + 12]
+    push dword [eax + 8]
+    push dword [eax + 4]
+    push dword [eax + 3]
+    push dword [eax + 2]
+    push dword [eax] 
+    push nt_headers_optional_header_64_str
+
+.continue_after_push:
+
+    push dword [ebp + 12]           ; sprintf buffer
+    call sprintf
+
+    push dword [ebp + 12]           ; sprintf buffer
+    call strlen
+    
+    push eax                        ; strlen
+    push dword [ebp + 12]           ; sprintf buffer 
+    push dword [ebp + 16]           ; std handle
+    call print_string
+
+.shutdown:
+    mov eax, [ebp - 4]              ; return value
+
+    leave
+    ret 12
+
 ; arg0: base addr file contents     [ebp + 8]
 ; arg1: Options                     [ebp + 12]
 ; arg2: std handle                  [ebp + 16]
@@ -487,13 +661,26 @@ parse_pe:
     call print_nt_headers_file_header
 
 .continue_from_nt_headers_file_header_check:
-    add ebx, 2                                      ; section header count 
+    add ebx, 20                                     ; optional header
+    mov [ebp - 16], ebx                             ; optional header saved
+
+    cmp dword [ebp - 36], 5                         ; print nt headers optional header
+    jne .continue_from_nt_headers_optional_header_check
+
+    ; print nt headers optional header
+    push dword [ebp + 16]                           ; std handle
+    mov eax, ebp
+    sub eax, 8228                                   ; sprintf buffer
+    push eax
+    push dword [ebp - 16]                           ; nt headers optional header
+    call print_nt_headers_optional_header
+
+.continue_from_nt_headers_optional_header_check:
+    mov ebx, [ebp - 12]                             ; file header
+    add ebx, 2                                      ; section header count
     movzx eax, word [ebx]
     mov [ebp - 20], eax                             ; section header count saved
 
-    add ebx, 18                                     ; optional header
-    mov [ebp - 16], ebx                             ; optional header saved
-    
     mov eax, [ebp - 12]                             ; file header
     mov ax, [eax]
     cmp word ax, 0x14c                              ; is file 32 bit
@@ -894,6 +1081,101 @@ nt_headers_file_header_str: db '        NT headers File Header', 0xa, \
                                 'Optional Hdr Size  : 0x%xw', 0xa, \
                                 'Characteristics    : 0x%xw', 0
 .len equ $ - nt_headers_file_header_str
+
+nt_headers_optional_header_32_str: db '        NT Headers Optional Header', 0xa, \
+                                    'Magic                      : 0x%xw', 0xa, \
+                                    'Major Linker Version       : 0x%xb', 0xa, \
+                                    'Minor Linker Version       : 0x%xb', 0xa, \
+                                    'Code Size                  : 0x%xd', 0xa, \
+                                    'Initialized Data Size      : 0x%xd', 0xa, \
+                                    'Uninitialized Data Size    : 0x%xd', 0xa, \
+                                    'Entry Point Addr           : 0x%xd', 0xa, \
+                                    'Base of Code               : 0x%xd', 0xa, \
+                                    'Base of Data               : 0x%xd', 0xa, \
+                                    'Base                       : 0x%xd', 0xa, \
+                                    'Section Alignment          : 0x%xd', 0xa, \
+                                    'File Alignment             : 0x%xd', 0xa, \
+                                    'Major OS Version           : 0x%xw', 0xa, \
+                                    'Minor OS Version           : 0x%xw', 0xa, \
+                                    'Major Image Version        : 0x%xw', 0xa, \
+                                    'Minor Image Version        : 0x%xw', 0xa, \
+                                    'Major Subsystem Version    : 0x%xw', 0xa, \
+                                    'Minor Subsystem Version    : 0x%xw', 0xa, \
+                                    'Win32 Version value        : 0x%xd', 0xa, \
+                                    'Size                       : 0x%xd', 0xa, \
+                                    'Headers Size               : 0x%xd', 0xa, \
+                                    'Checksum                   : 0x%xd', 0xa, \
+                                    'Subsystem                  : 0x%xw', 0xa, \
+                                    'Dll Characteristics        : 0x%xw', 0xa, \
+                                    'Stack Reserve Size         : 0x%xd', 0xa, \
+                                    'Stack Commit Size          : 0x%xd', 0xa, \
+                                    'Heap Reserve Size          : 0x%xd', 0xa, \
+                                    'Heap Commit Size           : 0x%xd', 0xa, \
+                                    'Loader Flags               : 0x%xd', 0xa, \
+                                    'Number of RVAs and Sizes   : 0x%xd', 0xa, \
+                                    'Export Directory           : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Import Directory           : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Resource Directory         : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Exception Directory        : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Security Directory         : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Base Relocation Table      : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Debug Directory            : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Arch Specific Data         : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'RVA of Global Ptr          : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'TLS Directory              : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Load Config Directory      : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Bound Import Directory     : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Import Address Table       : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Delay Load Import Descr    : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    '.NET Header                : RVA 0x%xd Size 0x%xd', 0
+.len equ $ - nt_headers_optional_header_32_str
+
+nt_headers_optional_header_64_str: db '        NT Headers Optional Header', 0xa, \
+                                    'Magic                      : 0x%xw', 0xa, \
+                                    'Major Linker Version       : 0x%xb', 0xa, \
+                                    'Minor Linker Version       : 0x%xb', 0xa, \
+                                    'Code Size                  : 0x%xd', 0xa, \
+                                    'Initialized Data Size      : 0x%xd', 0xa, \
+                                    'Uninitialized Data Size    : 0x%xd', 0xa, \
+                                    'Entry Point Addr           : 0x%xd', 0xa, \
+                                    'Base of Code               : 0x%xd', 0xa, \
+                                    'Base                       : 0x%xd%xd', 0xa, \
+                                    'Section Alignment          : 0x%xd', 0xa, \
+                                    'File Alignment             : 0x%xd', 0xa, \
+                                    'Major OS Version           : 0x%xw', 0xa, \
+                                    'Minor OS Version           : 0x%xw', 0xa, \
+                                    'Major Image Version        : 0x%xw', 0xa, \
+                                    'Minor Image Version        : 0x%xw', 0xa, \
+                                    'Major Subsystem Version    : 0x%xw', 0xa, \
+                                    'Minor Subsystem Version    : 0x%xw', 0xa, \
+                                    'Win32 Version value        : 0x%xd', 0xa, \
+                                    'Size                       : 0x%xd', 0xa, \
+                                    'Headers Size               : 0x%xd', 0xa, \
+                                    'Checksum                   : 0x%xd', 0xa, \
+                                    'Subsystem                  : 0x%xw', 0xa, \
+                                    'Dll Characteristics        : 0x%xw', 0xa, \
+                                    'Stack Reserve Size         : 0x%xd%xd', 0xa, \
+                                    'Stack Commit Size          : 0x%xd%xd', 0xa, \
+                                    'Heap Reserve Size          : 0x%xd%xd', 0xa, \
+                                    'Heap Commit Size           : 0x%xd%xd', 0xa, \
+                                    'Loader Flags               : 0x%xd', 0xa, \
+                                    'Number of RVAs and Sizes   : 0x%xd', 0xa, \
+                                    'Export Directory           : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Import Directory           : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Resource Directory         : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Exception Directory        : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Security Directory         : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Base Relocation Table      : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Debug Directory            : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Arch Specific Data         : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'RVA of Global Ptr          : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'TLS Directory              : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Load Config Directory      : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Bound Import Directory     : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Import Address Table       : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    'Delay Load Import Descr    : RVA 0x%xd Size 0x%xd', 0xa, \
+                                    '.NET Header                : RVA 0x%xd Size 0x%xd', 0
+.len equ $ - nt_headers_optional_header_64_str
 
 STD_HANDLE_ENUM equ -11
 INVALID_HANDLE_VALUE equ -1
