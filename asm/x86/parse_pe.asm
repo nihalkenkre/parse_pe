@@ -164,6 +164,166 @@ loop_export_descriptor_table:
     leave
     ret 16
 
+; arg0: ptr to dos header           [ebp + 8]
+; arg1: ptr to sprintf buffer       [ebp + 12]
+; arg2: std handle                  [ebp + 16]
+print_dos_header:
+    push ebp
+    mov ebp, esp
+
+    ; ebp - 4 = return value
+    sub esp, 4                      ; allocate local variable space
+    mov dword [ebp - 4], 0          ; return value
+
+    mov eax, [ebp + 8]              ; ptr to dos header
+
+    push dword [eax + 64]
+
+    push word 0
+    push word [eax + 60]
+    
+    push word 0
+    push word [eax + 58]
+
+    push word 0
+    push word [eax + 56]
+
+    push word 0
+    push word [eax + 54]
+
+    push word 0
+    push word [eax + 52]
+
+    push word 0
+    push word [eax + 50]
+
+    push word 0
+    push word [eax + 48]
+
+    push word 0
+    push word [eax + 46]
+
+    push word 0
+    push word [eax + 44]
+
+    push word 0
+    push word [eax + 42]
+
+    push word 0
+    push word [eax + 40]
+
+    push word 0
+    push word [eax + 38]
+
+    push word 0
+    push word [eax + 36]
+
+    push word 0
+    push word [eax + 34]
+
+    push word 0
+    push word [eax + 32]
+
+    push word 0
+    push word [eax + 30]
+
+    push word 0
+    push word [eax + 28]
+
+    push word 0
+    push word [eax + 26]
+
+    push word 0
+    push word [eax + 24]
+
+    push word 0
+    push word [eax + 22]
+
+    push word 0
+    push word [eax + 20]
+    
+    push word 0
+    push word [eax + 18]
+
+    push word 0
+    push word [eax + 16]
+
+    push word 0
+    push word [eax + 14]
+
+    push word 0
+    push word [eax + 12]
+
+    push word 0
+    push word [eax + 10]
+
+    push word 0
+    push word [eax + 8]
+    
+    push word 0
+    push word [eax + 6]
+
+    push word 0
+    push word [eax + 4]
+
+    push word 0
+    push word [eax + 2]
+
+    push word 0
+    push word [eax]
+
+    push dos_header_str
+    push dword [ebp + 12]           ; sprintf buffer
+    call sprintf
+    add esp, 128
+
+    push dword [ebp + 12]           ; sprintf buffer
+    call strlen
+
+    push eax                        ; strlen
+    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 16]           ; std handle
+    call print_string
+
+.shutdown:
+    mov eax, [ebp - 4]              ; return value
+
+    leave
+    ret 12
+
+; arg0: ptr to nt header            [ebp + 8]
+; arg1: sprintf buffer              [ebp + 12]
+; arg2: std handle                  [ebp + 16]
+print_nt_headers_signature:
+; int3
+    push ebp
+    mov ebp, esp
+
+    ; ebp - 4 = return value
+    sub esp, 4                      ; allocate local variable space
+    mov dword [ebp - 4], 0          ; return value
+
+    mov eax, [ebp + 8]
+    push dword [eax]                ; ptr to nt headers
+    push nt_headers_signature_str
+    push dword [ebp + 12]           ; sprintf buffer
+    call sprintf
+    add esp, 12
+
+    push dword [ebp + 12]           ; sprintf buffer
+    call strlen
+
+    push eax                        ; strlen
+    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 16]           ; std handle
+    call print_string
+
+.shutdown:
+    mov eax, [ebp - 4]              ; return value
+
+    leave
+    ret
+
 ; arg0: base addr file contents     [ebp + 8]
 ; arg1: Options                     [ebp + 12]
 ; arg2: std handle                  [ebp + 16]
@@ -284,147 +444,55 @@ parse_pe:
     jmp .cmp_end
 
 .options_arg_err:
-
-    push STD_HANDLE_ENUM
-    call [get_std_handle]
-    
     push ret_val_1_str.len
     push ret_val_1_str
-    push eax
+    push dword [ebp + 16]                           ; std handle
     call print_string
 
     jmp .shutdown
 
 .cmp_end:
-
     ; retrive and save the information
     mov ebx, [ebp + 8]                              ; base addr
     cmp dword [ebp - 36], 1                         ; print dos header
-    jne .continue_from_print_dos_header
+    jne .continue_from_print_dos_header_check
 
     ; print dos header
-
-    push dword [ebx + 64]
-
-    push word 0
-    push word [ebx + 60]
-    
-    push word 0
-    push word [ebx + 58]
-
-    push word 0
-    push word [ebx + 56]
-
-    push word 0
-    push word [ebx + 54]
-
-    push word 0
-    push word [ebx + 52]
-
-    push word 0
-    push word [ebx + 50]
-
-    push word 0
-    push word [ebx + 48]
-
-    push word 0
-    push word [ebx + 46]
-
-    push word 0
-    push word [ebx + 44]
-
-    push word 0
-    push word [ebx + 42]
-
-    push word 0
-    push word [ebx + 40]
-
-    push word 0
-    push word [ebx + 38]
-
-    push word 0
-    push word [ebx + 36]
-
-    push word 0
-    push word [ebx + 34]
-
-    push word 0
-    push word [ebx + 32]
-
-    push word 0
-    push word [ebx + 30]
-
-    push word 0
-    push word [ebx + 28]
-
-    push word 0
-    push word [ebx + 26]
-
-    push word 0
-    push word [ebx + 24]
-
-    push word 0
-    push word [ebx + 22]
-
-    push word 0
-    push word [ebx + 20]
-    
-    push word 0
-    push word [ebx + 18]
-
-    push word 0
-    push word [ebx + 16]
-
-    push word 0
-    push word [ebx + 14]
-
-    push word 0
-    push word [ebx + 12]
-
-    push word 0
-    push word [ebx + 10]
-
-    push word 0
-    push word [ebx + 8]
-    
-    push word 0
-    push word [ebx + 6]
-
-    push word 0
-    push word [ebx + 4]
-
-    push word 0
-    push word [ebx + 2]
-
-    push word 0
-    push word [ebx]
-
-    push dos_header_str
-    mov eax, ebp
-    sub eax, 8228                                   ; buffer for sprintf
-    push eax
-    call sprintf
-
-    mov eax, ebp
-    sub eax, 8228                                   ; buffer for sprintf
-    push eax
-    call strlen
-
-    push eax
-    mov eax, ebp
-    sub eax, 8228                                   ; buffer for sprintf
-    push eax
     push dword [ebp + 16]                           ; std handle
-    call print_string
+    mov eax, ebp
+    sub eax, 8228                                   ; sprintf buffer
+    push eax
+    push ebx                                        ; base addr
+    call print_dos_header
 
-.continue_from_print_dos_header:
+.continue_from_print_dos_header_check:
+
     add ebx, 0x3c                                   ; offset of e_lfanew
     movzx eax, word [ebx]                           ; e_lfanew
+
+    cmp dword [ebp - 36], 2                         ; print dos stub
+    jne .continue_from_print_dos_stub_check
+
+    ; print dos stub
+
+.continue_from_print_dos_stub_check:
 
     mov ebx, [ebp + 8]
     add ebx, eax                                    ; nt headers
     mov [ebp - 8], ebx                              ; nt headers saved
 
+    cmp dword [ebp - 36], 3                         ; print nt headers signature
+    jne .continue_from_nt_headers_signature_check
+    
+    ; print nt headers signature
+    push dword [ebp + 16]                           ; std handle
+    mov eax, ebp
+    sub eax, 8228                                   ; sprintf buffer
+    push eax
+    push ebx                                        ; nt headers
+    call print_nt_headers_signature
+
+.continue_from_nt_headers_signature_check:
     add ebx, 4                                      ; file header
     mov [ebp - 12], ebx                             ; file header saved
 
@@ -822,6 +890,10 @@ dos_header_str: db '                DOS Header', 0xa, \
 
 dos_stub_str: db '', 0
 
+nt_headers_signature_str: db '      NT headers Signature', 0xa, \
+                            'Signature: 0x%xd', 0
+.len equ $ - nt_headers_signature_str
+
 STD_HANDLE_ENUM equ -11
 INVALID_HANDLE_VALUE equ -1
 INVALID_FILE_SIZE equ -1
@@ -831,7 +903,6 @@ DOS_HEADER_BUFFER_SIZE equ 64
 NT_FILE_HEADER_BUFFER_SIZE equ 20
 OPTIONAL_HEADER_BUFFER_SIZE_64 equ 240
 OPTIONAL_HEADER_BUFFER_SIZE_32 equ 224
-
 
 ; Virtual Alloc
 MEM_COMMIT equ 0x00001000
