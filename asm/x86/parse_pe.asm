@@ -14,44 +14,44 @@ rva_to_offset:
 
     ; [ebp - 4] = return code
     ; [ebp - 8] = current section header
-    sub esp, 8                      ; allocate local variable space
+    sub esp, 8                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return code
+    mov dword [ebp - 4], 0                          ; return code
 
-    mov ecx, [ebp + 16]             ; section header count
-    mov edx, [ebp + 12]             ; section headers
+    mov ecx, [ebp + 16]                             ; section header count
+    mov edx, [ebp + 12]                             ; section headers
 
     .loop:
-        mov [ebp - 8], edx          ; current section header
-        add edx, 12                 ; virtual addr
-        mov eax, [edx]              ; virtual addr in eax
+        mov [ebp - 8], edx                          ; current section header
+        add edx, 12                                 ; virtual addr
+        mov eax, [edx]                              ; virtual addr in eax
 
-        add edx, 4                  ; size of raw data
-        add eax, [edx]              ; eax = virtual addr + raw data size
+        add edx, 4                                  ; size of raw data
+        add eax, [edx]                              ; eax = virtual addr + raw data size
 
-        cmp eax, [ebp + 8]          ; x >= rva
+        cmp eax, [ebp + 8]                          ; x >= rva
         jge .return_offset
 
-        add edx, 24                 ; add offset to end of section header (go to next header)
+        add edx, 24                                 ; add offset to end of section header (go to next header)
 
         dec ecx
         cmp ecx, 0
         jnz .loop
 
     .return_offset:
-        mov eax, [ebp + 8]          ; rva in eax
-        mov edx, [ebp - 8]          ; current section header
+        mov eax, [ebp + 8]                          ; rva in eax
+        mov edx, [ebp - 8]                          ; current section header
 
-        add edx, 12                 ; virtual addr
-        sub eax, [edx]              ; rva - virtual addr
+        add edx, 12                                 ; virtual addr
+        sub eax, [edx]                              ; rva - virtual addr
 
-        add edx, 8                  ; raw data ptr
-        add eax, [edx]              ; rva - virtual addr + raw data pointer
+        add edx, 8                                  ; raw data ptr
+        add eax, [edx]                              ; rva - virtual addr + raw data pointer
 
-        mov [ebp - 4], eax          ; return value
+        mov [ebp - 4], eax                          ; return value
     
 .shutdown:
-    mov eax, [ebp - 4]              ; return value
+    mov eax, [ebp - 4]                              ; return value
 
     leave
     ret 12
@@ -63,23 +63,23 @@ loop_section_headers:
     mov ebp, esp
 
     ; ebp - 4 = return value
-    sub esp, 4                      ; allocate local variable space
+    sub esp, 4                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return value
+    mov dword [ebp - 4], 0                          ; return value
 
 
-    mov ecx, [ebp + 12]             ; section header count
-    mov edx, [ebp + 8]              ; section headers
+    mov ecx, [ebp + 12]                             ; section header count
+    mov edx, [ebp + 8]                              ; section headers
 
     .loop:
-        add edx, 40                 ; add section header size (next section header)
+        add edx, 40                                 ; add section header size (next section header)
 
         dec ecx
         cmp ecx, 0
         jnz .loop
 
 .shutdown:
-    mov eax, [ebp - 4]              ; return value
+    mov eax, [ebp - 4]                              ; return value
 
     leave
     ret 8
@@ -94,28 +94,28 @@ loop_import_descriptor_table:
 
     ; ebp - 4 = return value
     ; ebp - 8 = offset
-    sub esp, 8                      ; allocate local variable space
+    sub esp, 8                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return value
+    mov dword [ebp - 4], 0                          ; return value
 
-    push dword [ebp + 16]           ; section header count
-    push dword [ebp + 12]           ; section headers
-    push dword [ebp + 8]            ; IDT rva
-    call rva_to_offset              ; offset in eax
+    push dword [ebp + 16]                           ; section header count
+    push dword [ebp + 12]                           ; section headers
+    push dword [ebp + 8]                            ; IDT rva
+    call rva_to_offset                              ; offset in eax
 
-    cmp eax, 0                      ; offset == 0 ?
+    cmp eax, 0                                      ; offset == 0 ?
     jle .shutdown
 
-    mov [ebp - 8], eax              ; offset
-    mov eax, [ebp + 20]             ; base addr
-    add eax, [ebp - 8]              ; base addr + offset
+    mov [ebp - 8], eax                              ; offset
+    mov eax, [ebp + 20]                             ; base addr
+    add eax, [ebp - 8]                              ; base addr + offset
         
     .loop:
-        add eax, 12                 ; name RVA
+        add eax, 12                                 ; name RVA
         cmp dword [eax], 0
         je .loop_end
 
-        add eax, 8                  ; next IDT
+        add eax, 8                                  ; next IDT
         jmp .loop
 
     ; TODO: Loop through functions of each imported DLL
@@ -123,7 +123,7 @@ loop_import_descriptor_table:
 .loop_end:
 
 .shutdown:
-    mov eax, [ebp - 4]              ; return value
+    mov eax, [ebp - 4]                              ; return value
 
     leave
     ret 16
@@ -138,34 +138,35 @@ loop_export_descriptor_table:
 
     ; ebp - 4 = return value
     ; ebp - 8 = offset
-    sub esp, 8                      ; allocate local variable space
+    sub esp, 8                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return value
+    mov dword [ebp - 4], 0                          ; return value
 
-    push dword [ebp + 16]           ; section header count
-    push dword [ebp + 12]           ; section headers
-    push dword [ebp + 8]            ; IDT rva
-    call rva_to_offset              ; offset in eax
+    push dword [ebp + 16]                           ; section header count
+    push dword [ebp + 12]                           ; section headers
+    push dword [ebp + 8]                            ; IDT rva
+    call rva_to_offset                              ; offset in eax
 
-    cmp eax, 0                      ; offset == 0 ?
+    cmp eax, 0                                      ; offset == 0 ?
     jle .shutdown
 
-    mov [ebp - 8], eax              ; offset
-    mov eax, [ebp + 20]             ; base addr
-    add eax, [ebp - 8]              ; base + offset
+    mov [ebp - 8], eax                              ; offset
+    mov eax, [ebp + 20]                             ; base addr
+    add eax, [ebp - 8]                              ; base + offset
 
-    mov ecx, [eax + 20]             ; number of entries in eat
+    mov ecx, [eax + 20]                             ; number of entries in eat
     
     ; TODO: Loop through exported functions / names
 
 .shutdown:
-    mov eax, [ebp - 4]              ; return value
+    mov eax, [ebp - 4]                              ; return value
 
     leave
     ret 16
 
-; arg0: base addr file contents      [ebp + 8]
-; arg1: Options                      [ebp + 12]
+; arg0: base addr file contents     [ebp + 8]
+; arg1: Options                     [ebp + 12]
+; arg2: std handle                  [ebp + 16]
 parse_pe:
     push ebp
     mov ebp, esp
@@ -181,111 +182,114 @@ parse_pe:
     ; ebp - 36 = options enum;  1 = dos header, 2 = dos stub, 3 = signature
     ;                           4 = file header, 5 = optional header, 6 = section header
     ;                           7 = export directory, 8 = import directory
-    sub esp, 36                     ; allocate local variable space
-    mov dword [ebp - 4], 0          ; return value
-    mov [ebp - 32], ebx             ; save ebx
+    ; ebp - 8228 = 8192 byte buffer for sprintf
+    sub esp, 8228                                   ; allocate local variable space
+    mov dword [ebp - 4], 0                          ; return value
+    mov [ebp - 32], ebx                             ; save ebx
 
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
+    push eax                                        ; Options
     push dos_header_arg
     call strcmpAA
     cmp eax, 0
     je .cmp_dos_stub
 
-    mov dword [ebp - 36], 1         ; dos header
+    mov dword [ebp - 36], 1                         ; dos header
     jmp .cmp_end
 
 .cmp_dos_stub:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
+    push eax                                        ; Options
     push dos_stub_arg
     call strcmpAA
     cmp eax, 0
     je .cmp_nt_headers_signature
 
-    mov dword [ebp - 36], 2         ; dos stub
+    mov dword [ebp - 36], 2                         ; dos stub
     jmp .cmp_end
 
 .cmp_nt_headers_signature:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
+    push eax                                        ; Options
     push nt_headers_signature_arg
     call strcmpAA
     cmp eax, 0
     je .cmp_nt_headers_file_header
 
-    mov dword [ebp - 36], 3         ; dos stub
+    mov dword [ebp - 36], 3                         ; dos stub
     jmp .cmp_end
 
 .cmp_nt_headers_file_header:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
+    push eax                                        ; Options
     push nt_headers_file_header_arg
     call strcmpAA
     cmp eax, 0
     je .cmp_nt_headers_optional_header
 
-    mov dword [ebp - 36], 4         ; file header
+    mov dword [ebp - 36], 4                         ; file header
     jmp .cmp_end
 
 .cmp_nt_headers_optional_header:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
+    push eax                                        ; Options
     push nt_headers_optional_header_arg
     call strcmpAA
     cmp eax, 0
     je .cmp_section_headers
 
-    mov dword [ebp - 36], 5         ; optional header
+    mov dword [ebp - 36], 5                         ; optional header
     jmp .cmp_end
 
 .cmp_section_headers:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
+    push eax                                        ; Options
     push section_headers_arg
     call strcmpAA
     cmp eax, 0
-    je .cmp_export_functions
+    je .cmp_exported_functions
 
-    mov dword [ebp - 36], 6         ; section headers
+    mov dword [ebp - 36], 6                         ; section headers
     jmp .cmp_end
 
-.cmp_export_functions:
+.cmp_exported_functions:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
-    push export_functions_arg
+    push eax                                        ; Options
+    push exported_functions_arg
     call strcmpAA
     cmp eax, 0
-    je .cmp_import_functions
+    je .cmp_imported_functions
 
-    mov dword [ebp - 36], 7         ; export directory
+    mov dword [ebp - 36], 7                         ; export directory
     jmp .cmp_end
 
-.cmp_import_functions:
+.cmp_imported_functions:
     mov eax, [ebp + 12]
     mov eax, [eax]
-    push eax                        ; Options
-    push import_functions_arg
+    push eax                                        ; Options
+    push imported_functions_arg
     call strcmpAA
     cmp eax, 0
     je .options_arg_err
 
-    mov dword [ebp - 36], 8         ; import directory
+    mov dword [ebp - 36], 8                         ; import directory
+
+    jmp .cmp_end
 
 .options_arg_err:
 
     push STD_HANDLE_ENUM
     call [get_std_handle]
     
-    push options_err_str.len
-    push options_err_str
+    push ret_val_1_str.len
+    push ret_val_1_str
     push eax
     call print_string
 
@@ -294,112 +298,231 @@ parse_pe:
 .cmp_end:
 
     ; retrive and save the information
-    mov ebx, [ebp + 8]              ; base addr
-    add ebx, 0x3c                   ; offset of e_lfanew
-    movzx eax, word [ebx]           ; e_lfanew
+    mov ebx, [ebp + 8]                              ; base addr
+    cmp dword [ebp - 36], 1                         ; print dos header
+    jne .continue_from_print_dos_header
+
+    ; print dos header
+
+    push dword [ebx + 64]
+
+    push word 0
+    push word [ebx + 60]
+    
+    push word 0
+    push word [ebx + 58]
+
+    push word 0
+    push word [ebx + 56]
+
+    push word 0
+    push word [ebx + 54]
+
+    push word 0
+    push word [ebx + 52]
+
+    push word 0
+    push word [ebx + 50]
+
+    push word 0
+    push word [ebx + 48]
+
+    push word 0
+    push word [ebx + 46]
+
+    push word 0
+    push word [ebx + 44]
+
+    push word 0
+    push word [ebx + 42]
+
+    push word 0
+    push word [ebx + 40]
+
+    push word 0
+    push word [ebx + 38]
+
+    push word 0
+    push word [ebx + 36]
+
+    push word 0
+    push word [ebx + 34]
+
+    push word 0
+    push word [ebx + 32]
+
+    push word 0
+    push word [ebx + 30]
+
+    push word 0
+    push word [ebx + 28]
+
+    push word 0
+    push word [ebx + 26]
+
+    push word 0
+    push word [ebx + 24]
+
+    push word 0
+    push word [ebx + 22]
+
+    push word 0
+    push word [ebx + 20]
+    
+    push word 0
+    push word [ebx + 18]
+
+    push word 0
+    push word [ebx + 16]
+
+    push word 0
+    push word [ebx + 14]
+
+    push word 0
+    push word [ebx + 12]
+
+    push word 0
+    push word [ebx + 10]
+
+    push word 0
+    push word [ebx + 8]
+    
+    push word 0
+    push word [ebx + 6]
+
+    push word 0
+    push word [ebx + 4]
+
+    push word 0
+    push word [ebx + 2]
+
+    push word 0
+    push word [ebx]
+
+    push dos_header_str
+    mov eax, ebp
+    sub eax, 8228                                   ; buffer for sprintf
+    push eax
+    call sprintf
+
+    mov eax, ebp
+    sub eax, 8228                                   ; buffer for sprintf
+    push eax
+    call strlen
+
+    push eax
+    mov eax, ebp
+    sub eax, 8228                                   ; buffer for sprintf
+    push eax
+    push dword [ebp + 16]                           ; std handle
+    call print_string
+
+.continue_from_print_dos_header:
+    add ebx, 0x3c                                   ; offset of e_lfanew
+    movzx eax, word [ebx]                           ; e_lfanew
 
     mov ebx, [ebp + 8]
-    add ebx, eax                    ; nt headers
-    mov [ebp - 8], ebx              ; nt headers saved
+    add ebx, eax                                    ; nt headers
+    mov [ebp - 8], ebx                              ; nt headers saved
 
-    add ebx, 4                      ; file header
-    mov [ebp - 12], ebx             ; file header saved
+    add ebx, 4                                      ; file header
+    mov [ebp - 12], ebx                             ; file header saved
 
-    add ebx, 2                      ; section header count 
+    add ebx, 2                                      ; section header count 
     movzx eax, word [ebx]
-    mov [ebp - 20], eax             ; section header count saved
+    mov [ebp - 20], eax                             ; section header count saved
 
-    add ebx, 18                     ; optional header
-    mov [ebp - 16], ebx             ; optional header saved
+    add ebx, 18                                     ; optional header
+    mov [ebp - 16], ebx                             ; optional header saved
     
-    mov eax, [ebp - 12]             ; file header
+    mov eax, [ebp - 12]                             ; file header
     mov ax, [eax]
-    cmp word ax, 0x14c              ; is file 32 bit
+    cmp word ax, 0x14c                              ; is file 32 bit
     je .32bit
-        mov eax, [ebp - 16]         ; optional header
-        add eax, 240                ; end of optional header, start of section headers
+        mov eax, [ebp - 16]                         ; optional header
+        add eax, 240                                ; end of optional header, start of section headers
 
-        mov [ebp - 24], eax         ; section headers
-        mov dword [ebp - 28], 1     ; file bitness 1 for 64 bit
+        mov [ebp - 24], eax                         ; section headers
+        mov dword [ebp - 28], 1                     ; file bitness 1 for 64 bit
 
         jmp .continue_32_bit
 
     .32bit:
-        mov eax, [ebp - 16]         ; optional header
-        add eax, 224                ; end of optional header, start of section header
+        mov eax, [ebp - 16]                         ; optional header
+        add eax, 224                                ; end of optional header, start of section header
 
-        mov [ebp - 24], eax         ; section headers
-        mov dword [ebp - 24], 0     ; file bitness 0 for 32 bit
+        mov [ebp - 24], eax                         ; section headers
+        mov dword [ebp - 24], 0                     ; file bitness 0 for 32 bit
 
 .continue_32_bit:
     ; loop section headers
 
-    push dword [ebp - 20]           ; section header count
-    push dword [ebp - 24]           ; section headers
+    push dword [ebp - 20]                           ; section header count
+    push dword [ebp - 24]                           ; section headers
     call loop_section_headers
 
 .idt:
     ; loop IDT
-    mov eax, [ebp - 16]             ; optional header
+    mov eax, [ebp - 16]                             ; optional header
 
-    cmp dword [ebp - 28], 0         ; is file 32 bit
+    cmp dword [ebp - 28], 0                         ; is file 32 bit
     je .32bitidt
-        add eax, 120                ; IDT
+        add eax, 120                                ; IDT
         mov eax, [eax]
 
-        cmp eax, 0                  ; if IDT rva == 0 ?
+        cmp eax, 0                                  ; if IDT rva == 0 ?
 
         je .edt
         jmp .continue_bitcheck_idt
 
     .32bitidt:
-        add eax, 104                ; IDT
+        add eax, 104                                ; IDT
         mov eax, [eax]
 
-        cmp eax, 0                  ; if IDT rva == 0 ?
+        cmp eax, 0                                  ; if IDT rva == 0 ?
 
         je .edt
 
 .continue_bitcheck_idt:
-    push dword [ebp + 8]                ; base addr
-    push dword [ebp - 20]               ; section header count
-    push dword [ebp - 24]               ; section headers
-    push eax                            ; IDT rva
+    push dword [ebp + 8]                            ; base addr
+    push dword [ebp - 20]                           ; section header count
+    push dword [ebp - 24]                           ; section headers
+    push eax                                        ; IDT rva
     call loop_import_descriptor_table
 
 .edt:
     ; loop EDT
-    mov eax, [ebp - 16]             ; optional header
+    mov eax, [ebp - 16]                             ; optional header
 
-    cmp dword [ebp - 28], 0         ; is file 32 bit
+    cmp dword [ebp - 28], 0                         ; is file 32 bit
     je .32bitedt
-        add eax, 112                ; EDT
+        add eax, 112                                ; EDT
         mov eax, [eax]
 
-        cmp eax, 0                  ; if EDT rva == 0 ?
+        cmp eax, 0                                  ; if EDT rva == 0 ?
 
         je .shutdown
         jmp .continue_bitcheck_edt
 
     .32bitedt:
-        add eax, 96                 ; EDT
+        add eax, 96                                 ; EDT
         mov eax, [eax]
 
-        cmp eax, 0                  ; if EDT rva == 0 ?
+        cmp eax, 0                                  ; if EDT rva == 0 ?
 
         je .shutdown
 
 .continue_bitcheck_edt:
-    push dword [ebp + 8]                ; base addr
-    push dword [ebp - 20]               ; section header count
-    push dword [ebp - 24]               ; section headers
-    push eax                            ; EDT rva
+    push dword [ebp + 8]                            ; base addr
+    push dword [ebp - 20]                           ; section header count
+    push dword [ebp - 24]                           ; section headers
+    push eax                                        ; EDT rva
     call loop_export_descriptor_table
 
 .shutdown:
 
-    mov eax, [ebp - 4]                  ; return value
-    mov ebx, [ebp - 32]                 ; restore ebx
+    mov eax, [ebp - 4]                              ; return value
+    mov ebx, [ebp - 32]                             ; restore ebx
 
     leave
     ret 8
@@ -419,33 +542,35 @@ _parse_pe:
     ; ebp - 168 = kernel handle
     ; ebp - 172 = std handle
     ; ebp - 176 = shlwapi addr
-    sub esp, 176                            ; allocate local variable space
+    sub esp, 176                                    ; allocate local variable space
 
-    mov dword [ebp - 4], 0                  ; return value
+    mov dword [ebp - 4], 0                          ; return value
 
     call get_kernel_module_handle
-    mov [ebp - 168], eax                    ; kernel handle
+    mov [ebp - 168], eax                            ; kernel handle
 
-    push dword [ebp - 168]                  ; kernel handle
+    push dword [ebp - 168]                          ; kernel handle
     call populate_kernel_function_ptrs_by_name
 
     push STD_HANDLE_ENUM
     call [get_std_handle]
 
-    mov [ebp - 172], eax                    ; std handle
+    mov [ebp - 172], eax                            ; std handle
 
-    cmp byte [ebp + 8], 3                   ; argc == 3 ?
+    ; check if 2 args are passed to the exe
+    cmp dword [ebp + 8], 3                          ; argc == 3 ?
     je .continue_argc_check
-        push ret_val_1_str.len
-        push ret_val_1_str
-        push dword [ebp - 172]              ; std handle
-        call print_string
 
-        call [get_last_error]
+    push ret_val_1_str.len
+    push ret_val_1_str
+    push dword [ebp - 172]                          ; std handle
+    call print_string
 
-        mov dword [ebp - 4], 1
+    call [get_last_error]
 
-        jmp .shutdown
+    mov dword [ebp - 4], 1                          ; return value
+
+    jmp .shutdown
 
 .continue_argc_check:
 
@@ -461,7 +586,7 @@ _parse_pe:
     cmp eax, 0
     je .shutdown
 
-    mov [ebp - 176], eax                    ; shlwapi addr
+    mov [ebp - 176], eax                            ; shlwapi addr
 
     push xor_key.len
     push xor_key
@@ -470,7 +595,7 @@ _parse_pe:
     call my_xor
 
     push path_file_exists_a_xor
-    push dword [ebp - 176]                  ; shlwapi addr
+    push dword [ebp - 176]                          ; shlwapi addr
     call get_proc_address_by_get_proc_addr
 
     cmp eax, 0
@@ -478,17 +603,17 @@ _parse_pe:
 
     mov [path_file_exists_a], eax
 
-    mov edx, [ebp + 12]                     ; argv in edx
-    mov edx, [edx + 4]                      ; argv[1] in edx
+    mov edx, [ebp + 12]                             ; argv in edx
+    mov edx, [edx + 4]                              ; argv[1] in edx
 
     push edx
     call [path_file_exists_a]
 
-    cmp eax, 1                              ; does file exist
+    cmp eax, 1                                      ; does file exist
     je .continue_path_file_check
         push ret_val_2_str.len
         push ret_val_2_str
-        push dword [ebp - 172]              ; std handle
+        push dword [ebp - 172]                      ; std handle
         call print_string
 
         call [get_last_error]
@@ -501,7 +626,7 @@ _parse_pe:
     push 0
 
     mov edx, esp
-    sub edx, 148
+    sub edx, 148                                    ; OFFILESTRUCT
     push edx
 
     mov edx, [ebp + 12]                             ; argv
@@ -514,7 +639,7 @@ _parse_pe:
     jne .continue_open_file
         push ret_val_3_open_file_str.len
         push ret_val_3_open_file_str
-        push dword [ebp - 172]              ; std handle
+        push dword [ebp - 172]                      ; std handle
         call print_string
 
         call [get_last_error]
@@ -524,30 +649,30 @@ _parse_pe:
         jmp .shutdown
 
 .continue_open_file:
-    mov [ebp - 152], eax        ; file handle
+    mov [ebp - 152], eax                            ; file handle
 
     mov edx, ebp
-    sub edx, 156
+    sub edx, 156                                    ; file size high order dword
     push edx
 
-    push dword [ebp - 152]
-    call [get_file_size]                             ; file size in eax
+    push dword [ebp - 152]                          ; file handle
+    call [get_file_size]                            ; file size in eax
 
     cmp eax, INVALID_FILE_SIZE
     jne .continue_get_file_size
         push ret_val_4_get_file_size_str.len
         push ret_val_4_get_file_size_str
-        push dword [ebp - 172]              ; std handle
+        push dword [ebp - 172]                      ; std handle
         call print_string
 
         call [get_last_error]
 
-        mov dword [ebp - 4], 4
+        mov dword [ebp - 4], 4                      ; return value
 
         jmp .shutdown
 
 .continue_get_file_size:
-    mov [ebp - 160], eax       ; file size saved
+    mov [ebp - 160], eax                            ; file size saved
 
     mov edx, PAGE_READWRITE
     push edx
@@ -556,7 +681,7 @@ _parse_pe:
     or edx, MEM_COMMIT
     push edx
 
-    push dword [ebp - 160]     ; file size
+    push dword [ebp - 160]                          ; file size
     push 0
     call [virtual_alloc]
 
@@ -564,55 +689,56 @@ _parse_pe:
     jne .continue_virtual_alloc
         push ret_val_5_virtual_alloc_str.len
         push ret_val_5_virtual_alloc_str
-        push dword [ebp - 172]              ; std handle
+        push dword [ebp - 172]                      ; std handle
         call print_string
         
         call [get_last_error]
 
-        mov dword [ebp - 4], 5
+        mov dword [ebp - 4], 5                      ; return value
 
         jmp .shutdown
 
 .continue_virtual_alloc:
-    mov dword [ebp - 164], eax ; alloced mem saved
+    mov dword [ebp - 164], eax                      ; alloced mem
 
     push 0
     push 0
-    push dword [ebp - 160]     ; file size
-    push dword [ebp - 164]     ; alloced mem
-    push dword [ebp - 152]     ; file handle
+    push dword [ebp - 160]                          ; file size
+    push dword [ebp - 164]                          ; alloced mem
+    push dword [ebp - 152]                          ; file handle
     call [read_file]
 
     cmp eax, 0                                      ; 1: successful read
     jne .continue_read_file
         push ret_val_6_read_file_str.len
         push ret_val_6_read_file_str
-        push dword [ebp - 172]              ; std handle
+        push dword [ebp - 172]                      ; std handle
         call print_string
 
         call [get_last_error]
 
-        mov dword [ebp - 4], 6
+        mov dword [ebp - 4], 6                      ; return value
 
         jmp .shutdown
 
 .continue_read_file:
+    push dword [ebp - 172]                          ; file handle
     mov edx, [ebp + 12]                             ; argv
     add edx, 8                                      ; command line Options
     push edx
-    push dword [ebp - 164]     ; alloced mem
+    push dword [ebp - 164]                          ; alloced mem
     call parse_pe
 
 .shutdown:
     push MEM_RELEASE
     push 0
-    push dword [ebp - 164]     ; alloced mem
+    push dword [ebp - 164]                          ; alloced mem
     call [virtual_free]
 
-    push dword [ebp - 152]      ; file handle
+    push dword [ebp - 152]                          ; file handle
     call [close_handle]
 
-    mov eax, [ebp - 4]       ; return code
+    mov eax, [ebp - 4]                              ; return value
 
     leave
     ret 8
@@ -621,7 +747,7 @@ _parse_pe:
 section .data
 %include '../utils/utils_32_data.asm'
 
-ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0
+ret_val_1_str: db 'Usage: parse_pe.exe <filename> <options>', 0xa, ' <options>: --dos-header', 0xa, '            --dos-stub', 0xa, '            --nt-headers-signature', 0xa,'            --nt-headers-file-header', 0xa, '            --nt-headers-optional-header', 0xa, '            --section-headers', 0xa, '            --imported-functions', 0xa, '            --exported-functions', 0
 .len equ $ - ret_val_1_str
 
 ret_val_2_str: db 'ERR: Input file does not exist', 0
@@ -657,14 +783,14 @@ nt_headers_optional_header_arg: db '--nt-headers-optional-header', 0
 section_headers_arg: db '--section-headers', 0
 .len equ $ - section_headers_arg
 
-import_functions_arg: db '--import-functions', 0
-.len equ $ - import_functions_arg
+imported_functions_arg: db '--imported-functions', 0
+.len equ $ - imported_functions_arg
 
-export_functions_arg: db '--export-functions', 0
-.len equ $ - export_functions_arg
+exported_functions_arg: db '--exported-functions', 0
+.len equ $ - exported_functions_arg
 
-options_err_str: db 'Please pass one of the following options', 0xa, '--dos-header, --dos-stub, --nt-headers-signature, --nt-headers-file-header, --nt-headers-optional-header, --section-headers, --import-functions, --export-functions', 0xa, 0
-.len equ $ - options_err_str
+help_arg: db '-h', 0
+.len equ $ - help_arg
 
 shlwapi_xor: db 0x63, 0x58, 0x5c, 0x47, 0x51, 0x40, 0x59, 0x1e, 0x54, 0x5c, 0x5c, 0
 .len equ $ - shlwapi_xor - 1
@@ -672,11 +798,29 @@ shlwapi_xor: db 0x63, 0x58, 0x5c, 0x47, 0x51, 0x40, 0x59, 0x1e, 0x54, 0x5c, 0x5c
 path_file_exists_a_xor: db 0x60, 0x51, 0x44, 0x58, 0x76, 0x59, 0x5c, 0x55, 0x75, 0x48, 0x59, 0x43, 0x44, 0x43, 0x71, 0
 .len equ $ - path_file_exists_a_xor - 1
 
-dos_header_str: db '            DOS Header\n Magic Number : %x\n Bytes on Last Page: 0x%x\n', 0
+dos_header_str: db '                DOS Header', 0xa, \
+                'Magic Number                   : %xw', 0xa, \
+                'Bytes on Last Page             : 0x%xw', 0xa, \
+                'Pages in file                  : 0x%xw', 0xa, \
+                'Relocations                    : 0x%xw', 0xa, \
+                'Paragaph Header Size           : 0x%xw', 0xa, \
+                'Min. extra paragaphs           : 0x%xw', 0xa, \
+                'Max. extra paragaphs           : 0x%xw', 0xa, \
+                'Initial Relative SS value      : 0x%xw', 0xa, \
+                'Initial SP value               : 0x%xw', 0xa, \
+                'Checksum                       : 0x%xw', 0xa, \
+                'Initial IP value               : 0x%xw', 0xa, \
+                'Initial Relative CS value      : 0x%xw', 0xa, \
+                'File Addr of Reloc table       : 0x%xw', 0xa, \
+                'Overlay Number                 : 0x%xw', 0xa, \
+                'Reserved Words                 : 0x%xw 0x%xw 0x%xw 0x%xw', 0xa, \
+                'OEM Identifier                 : 0x%xw', 0xa, \
+                'OEM Information                : 0x%xw', 0xa, \
+                'Reserved Words                 : 0x%xw 0x%xw 0x%xw 0x%xw 0x%xw 0x%xw 0x%xw 0x%xw 0x%xw 0x%xw', 0xa, \
+                'File Addr of New EXE header    : 0x%xd', 0
 .len equ $ - dos_header_str
 
 dos_stub_str: db '', 0
-
 
 STD_HANDLE_ENUM equ -11
 INVALID_HANDLE_VALUE equ -1
@@ -685,7 +829,9 @@ OF_READ equ 0
 OF_FILE_STRUCT_SIZE equ 144
 DOS_HEADER_BUFFER_SIZE equ 64
 NT_FILE_HEADER_BUFFER_SIZE equ 20
-OPTIONAL_HEADER_BUFFER_SIZE equ 240 ; 224 bytes 32bit / 240 bytes 64bit
+OPTIONAL_HEADER_BUFFER_SIZE_64 equ 240
+OPTIONAL_HEADER_BUFFER_SIZE_32 equ 224
+
 
 ; Virtual Alloc
 MEM_COMMIT equ 0x00001000
