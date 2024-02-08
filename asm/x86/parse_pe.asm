@@ -317,7 +317,7 @@ print_nt_headers_optional_header:
 
     mov eax, [ebp + 8]              ; nt headers optional header
 
-    cmp word [eax], 0x20b                ; is pe 64 bit ?
+    cmp word [eax], 0x20b           ; is pe 64 bit ?
     je .64bitOptionalHeader
 
     ; 32 bit optional header
@@ -388,7 +388,6 @@ print_nt_headers_optional_header:
     jmp .continue_after_push
 
 .64bitOptionalHeader:
-    push dword [eax + 244]
     push dword [eax + 240]
     push dword [eax + 236]
     push dword [eax + 232]
@@ -463,6 +462,17 @@ print_nt_headers_optional_header:
     push dword [ebp + 12]           ; sprintf buffer
     call sprintf
 
+    mov eax, [ebp + 8]              ; nt headers optional header
+    cmp word [eax], 0x20b           ; is pe 64 bit ?
+    je .clear_64bit_stack
+
+    add esp, 260
+    jmp .continue_after_stack_clear
+
+.clear_64bit_stack:
+    add esp, 280
+
+.continue_after_stack_clear:
     push dword [ebp + 12]           ; sprintf buffer
     call strlen
     
