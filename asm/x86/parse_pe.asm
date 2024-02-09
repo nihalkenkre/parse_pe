@@ -35,7 +35,6 @@ rva_to_offset:
         add edx, 24                                 ; add offset to end of section header (go to next header)
 
         dec ecx
-        cmp ecx, 0
         jnz .loop
 
     .return_offset:
@@ -55,34 +54,6 @@ rva_to_offset:
 
     leave
     ret 12
-
-; arg0: section headers             [ebp + 8]
-; arg1: section header count        [ebp + 12]
-loop_section_headers:
-    push ebp
-    mov ebp, esp
-
-    ; ebp - 4 = return value
-    sub esp, 4                                      ; allocate local variable space
-
-    mov dword [ebp - 4], 0                          ; return value
-
-
-    mov ecx, [ebp + 12]                             ; section header count
-    mov edx, [ebp + 8]                              ; section headers
-
-    .loop:
-        add edx, 40                                 ; add section header size (next section header)
-
-        dec ecx
-        cmp ecx, 0
-        jnz .loop
-
-.shutdown:
-    mov eax, [ebp - 4]                              ; return value
-
-    leave
-    ret 8
 
 ; arg0: import descriptor table rva     [ebp + 8]
 ; arg1: section headers                 [ebp + 12]
@@ -488,18 +459,26 @@ print_nt_headers_optional_header:
     ret 12
 
 ; arg0: ptr to section headers      [ebp + 8]
-; arg1: sprintf buffer              [ebp + 12]
-; arg2: std handle                  [ebp + 16]
+; arg1: section header count        [ebp + 12]
+; arg2: sprintf buffer              [ebp + 16]
+; arg3: std handle                  [ebp + 20]
 print_section_headers:
     push ebp
     mov ebp, esp
 
     ; ebp - 4 = return value
-    sub esp, 4                      ; allocate local variable space
+    ; ebp - 8 = current section header addr
+    ; ebp - 12 = current section index reverse
+    sub esp, 12                     ; allocate local variable space
 
     mov dword [ebp - 4], 0          ; return value
+    mov ecx, [ebp + 12]             ; section header count
+    mov [ebp - 12], ecx             ; section header index reverse
 
     mov eax, [ebp + 8]              ; section headers
+    mov [ebp - 8], eax              ; current section header addr
+.loop:
+    mov eax, [ebp - 8]              ; current section header addr
 
     push dword [eax + 40]
     push dword [eax + 36]
@@ -513,22 +492,27 @@ print_section_headers:
     push dword [eax + 8]
     push dword eax
     push section_headers_str
-    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 16]           ; sprintf buffer
     call sprintf
 
-    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 16]           ; sprintf buffer
     call strlen
 
     push eax                        ; strlen
-    push dword [ebp + 12]           ; sprintf buffer 
-    push dword [ebp + 16]           ; std handle
+    push dword [ebp + 16]           ; sprintf buffer 
+    push dword [ebp + 20]           ; std handle
     call print_string
+
+    add dword [ebp - 8], 40         ; current section header addr
+    dec dword [ebp - 12]            ; current section header index reverse
+
+    jnz .loop
 
 .shutdown:
     mov eax, [ebp - 4]              ; return value
     
     leave
-    ret 12
+    ret 16
 
 ; arg0: base addr file contents     [ebp + 8]
 ; arg1: Options                     [ebp + 12]
@@ -757,21 +741,15 @@ parse_pe:
 
     cmp dword [ebp - 36], 6                         ; print section headers
     jne .continue_from_section_header_check
-
     push dword [ebp + 16]                           ; std handle
     mov eax, ebp
     sub eax, 8228                                   ; sprintf buffer
     push eax
+    push dword [ebp - 20]                           ; section header count
     push dword [ebp - 24]                           ; section headers
     call print_section_headers
 
 .continue_from_section_header_check:
-
-    ; loop section headers
-
-    push dword [ebp - 20]                           ; section header count
-    push dword [ebp - 24]                           ; section headers
-    call loop_section_headers
 
 .idt:
     ; loop IDT
@@ -1243,7 +1221,7 @@ nt_headers_optional_header_64_str: db '        NT Headers Optional Header', 0xa,
                                     '.NET Header                : RVA 0x%xd Size 0x%xd', 0
 .len equ $ - nt_headers_optional_header_64_str
 
-section_headers_str: db '       Section Headers', 0xa, \
+section_headers_str: db '       Section Header', 0xa, \
                         'Name                   : %s', 0xa, \
                         'Virtual Size           : 0x%xd', 0xa, \
                         'Virtual Addr           : 0x%xd', 0xa, \
@@ -1253,7 +1231,7 @@ section_headers_str: db '       Section Headers', 0xa, \
                         'Line Numbers Pointer   : 0x%xd', 0xa, \
                         'Relocs Count           : 0x%xd', 0xa, \
                         'Line Numbers Count     : 0x%xd', 0xa, \
-                        'Characteristics        : 0x%xd', 0
+                        'Characteristics        : 0x%xd', 0xa, 0
 .len equ $ - section_headers_str
 
 STD_HANDLE_ENUM equ -11
