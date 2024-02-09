@@ -183,15 +183,15 @@ print_dos_header:
     push dword [eax]
 
     push dos_header_str
-    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 12]           ; ptr to sprintf buffer
     call sprintf
     add esp, 128
 
-    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 12]           ; ptr to sprintf buffer
     call strlen
 
     push eax                        ; strlen
-    push dword [ebp + 12]           ; sprintf buffer
+    push dword [ebp + 12]           ; ptr to sprintf buffer
     push dword [ebp + 16]           ; std handle
     call print_string
 
@@ -537,7 +537,7 @@ parse_pe:
     mov dword [ebp - 4], 0                          ; return value
     mov [ebp - 32], ebx                             ; save ebx
 
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push dos_header_arg
@@ -545,11 +545,11 @@ parse_pe:
     cmp eax, 0
     je .cmp_dos_stub
 
-    mov dword [ebp - 36], 1                         ; dos header
+    mov dword [ebp - 36], 1                         ; dos header enum
     jmp .cmp_end
 
 .cmp_dos_stub:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push dos_stub_arg
@@ -561,7 +561,7 @@ parse_pe:
     jmp .cmp_end
 
 .cmp_nt_headers_signature:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push nt_headers_signature_arg
@@ -569,11 +569,11 @@ parse_pe:
     cmp eax, 0
     je .cmp_nt_headers_file_header
 
-    mov dword [ebp - 36], 3                         ; dos stub
+    mov dword [ebp - 36], 3                         ; dos stub enum
     jmp .cmp_end
 
 .cmp_nt_headers_file_header:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push nt_headers_file_header_arg
@@ -581,11 +581,11 @@ parse_pe:
     cmp eax, 0
     je .cmp_nt_headers_optional_header
 
-    mov dword [ebp - 36], 4                         ; file header
+    mov dword [ebp - 36], 4                         ; nt headers file header enum
     jmp .cmp_end
 
 .cmp_nt_headers_optional_header:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push nt_headers_optional_header_arg
@@ -593,11 +593,11 @@ parse_pe:
     cmp eax, 0
     je .cmp_section_headers
 
-    mov dword [ebp - 36], 5                         ; optional header
+    mov dword [ebp - 36], 5                         ; nt headers optional header enum
     jmp .cmp_end
 
 .cmp_section_headers:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push section_headers_arg
@@ -605,11 +605,11 @@ parse_pe:
     cmp eax, 0
     je .cmp_exported_functions
 
-    mov dword [ebp - 36], 6                         ; section headers
+    mov dword [ebp - 36], 6                         ; section headers enum
     jmp .cmp_end
 
 .cmp_exported_functions:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push exported_functions_arg
@@ -621,7 +621,7 @@ parse_pe:
     jmp .cmp_end
 
 .cmp_imported_functions:
-    mov eax, [ebp + 12]
+    mov eax, [ebp + 12]                             ; *Options
     mov eax, [eax]
     push eax                                        ; Options
     push imported_functions_arg
@@ -652,7 +652,7 @@ parse_pe:
     mov eax, ebp
     sub eax, 8228                                   ; sprintf buffer
     push eax
-    push ebx                                        ; base addr
+    push [ebp + 8]                                  ; base addr
     call print_dos_header
 
 .continue_from_print_dos_header_check:
@@ -1078,9 +1078,6 @@ imported_functions_arg: db '--imported-functions', 0
 
 exported_functions_arg: db '--exported-functions', 0
 .len equ $ - exported_functions_arg
-
-help_arg: db '-h', 0
-.len equ $ - help_arg
 
 shlwapi_xor: db 0x63, 0x58, 0x5c, 0x47, 0x51, 0x40, 0x59, 0x1e, 0x54, 0x5c, 0x5c, 0
 .len equ $ - shlwapi_xor - 1
