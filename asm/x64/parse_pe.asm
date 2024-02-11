@@ -200,67 +200,67 @@ print_dos_header:
         mov rax, [rbp + 16]             ; ptr to dos header
         movzx r8d, word [rax]
         movzx r9d, word [rax + 2]
-        mov r10w, word [rax + 4]
+        mov r10w, [rax + 4]
         mov [rsp + 32], r10
-        mov r10w, word [rax + 6]
+        mov r10w, [rax + 6]
         mov [rsp + 40], r10
-        mov r10w, word [rax + 8]
+        mov r10w, [rax + 8]
         mov [rsp + 48], r10
-        mov r10w, word [rax + 10]
+        mov r10w, [rax + 10]
         mov [rsp + 56], r10
-        mov r10w, word [rax + 12]
+        mov r10w, [rax + 12]
         mov [rsp + 64], r10
-        mov r10w, word [rax + 14]
+        mov r10w, [rax + 14]
         mov [rsp + 72], r10
-        mov r10w, word [rax + 16]
+        mov r10w, [rax + 16]
         mov [rsp + 80], r10
-        mov r10w, word [rax + 18]
+        mov r10w, [rax + 18]
         mov [rsp + 88], r10
-        mov r10w, word [rax + 20]
+        mov r10w, [rax + 20]
         mov [rsp + 96], r10
-        mov r10w, word [rax + 22]
+        mov r10w, [rax + 22]
         mov [rsp + 104], r10
-        mov r10w, word [rax + 24]
+        mov r10w, [rax + 24]
         mov [rsp + 112], r10
-        mov r10w, word [rax + 26]
+        mov r10w, [rax + 26]
         mov [rsp + 120], r10
-        mov r10w, word [rax + 28]
+        mov r10w, [rax + 28]
         mov [rsp + 128], r10
-        mov r10w, word [rax + 30]
+        mov r10w, [rax + 30]
         mov [rsp + 136], r10
-        mov r10w, word [rax + 32]
+        mov r10w, [rax + 32]
         mov [rsp + 144], r10
-        mov r10w, word [rax + 34]
+        mov r10w, [rax + 34]
         mov [rsp + 152], r10
-        mov r10w, word [rax + 36]
+        mov r10w, [rax + 36]
         mov [rsp + 160], r10
-        mov r10w, word [rax + 38]
+        mov r10w, [rax + 38]
         mov [rsp + 168], r10
-        mov r10w, word [rax + 40]
+        mov r10w, [rax + 40]
         mov [rsp + 176], r10
-        mov r10w, word [rax + 42]
+        mov r10w, [rax + 42]
         mov [rsp + 184], r10
-        mov r10w, word [rax + 44]
+        mov r10w, [rax + 44]
         mov [rsp + 192], r10
-        mov r10w, word [rax + 46]
+        mov r10w, [rax + 46]
         mov [rsp + 200], r10
-        mov r10w, word [rax + 48]
+        mov r10w, [rax + 48]
         mov [rsp + 208], r10
-        mov r10w, word [rax + 50]
+        mov r10w, [rax + 50]
         mov [rsp + 216], r10
-        mov r10w, word [rax + 52]
+        mov r10w, [rax + 52]
         mov [rsp + 224], r10
-        mov r10w, word [rax + 54]
+        mov r10w, [rax + 54]
         mov [rsp + 232], r10
-        mov r10w, word [rax + 56]
+        mov r10w, [rax + 56]
         mov [rsp + 240], r10
-        mov r10w, word [rax + 58]
+        mov r10w, [rax + 58]
         mov [rsp + 248], r10
-        mov r10w, word [rax + 60]
+        mov r10w, [rax + 60]
         mov [rsp + 256], r10
-        mov r10w, word [rax + 62]
+        mov r10w, [rax + 62]
         mov [rsp + 264], r10
-        mov r10w, word [rax + 64]
+        mov r10w, [rax + 64]
         mov [rsp + 272], r10
         call sprintf
         add rsp, 272
@@ -275,6 +275,394 @@ print_dos_header:
 
     .shutdown:
         mov rax, [rbp - 8]              ; return value
+
+        leave
+        ret
+
+; arg0: ptr to nt headers       rcx
+; arg1: ptr to sprintf buffer   rdx
+; arg2: std handle              r8
+print_nt_headers_signature:
+        push rbp
+        mov rbp, rsp
+
+        mov [rbp + 16], rcx                 ; ptr to nt headers
+        mov [rbp + 24], rdx                 ; ptr to sprintf buffer
+        mov [rbp + 32], r8                  ; std handle
+
+        ; rbp - 8 = return value
+        ; rbp - 16 = 8 bytes padding
+        sub rsp, 16                         ; allocate local variable space
+        sub rsp, 32                         ; allocate shadow space
+
+        mov qword [rbp - 8], 0              ; return value
+
+        mov rcx, [rbp + 24]                 ; ptr to sprintf buffer
+        mov rdx, nt_headers_signature_str
+        mov rax, [rbp + 16]                 ; ptr to nt headers
+        mov r8d, [rax]
+        call sprintf
+
+        mov rcx, [ebp + 24]                 ; ptr to sprintf buffer
+        call strlen
+
+        mov rcx, [rbp + 32]                 ; std handle
+        mov rdx, [rbp + 24]                 ; ptr to sprintf buffer
+        mov r8, rax                         ; strlen
+        call print_string
+
+    .shutdown:
+        mov rax, [rbp - 8]                  ; return value
+
+        leave
+        ret
+
+; arg0: ptr to nt headers file header   rcx
+; arg1: ptr to sprintf buffer           rdx
+; arg2: std handle                      r8
+print_nt_headers_file_header:
+        push rbp
+        mov rbp, rsp
+
+        mov [rbp + 16], rcx                 ; ptr to nt headers file header
+        mov [rbp + 24], rdx                 ; ptr to sprintf buffer
+        mov [rbp + 32], r8                  ; std handle
+
+        ; rbp - 8 = return value
+        ; rbp - 16 = 8 bytes padding
+        sub rsp, 16                         ; allocate local variable space
+        sub rsp, 32                         ; allocate shadow space
+
+        mov qword [rbp - 8], 0              ; return value
+
+        sub rsp, 48                         ; 5 args + 8 byte padding
+        mov rcx, [rbp + 24]                 ; ptr to sprintf buffer
+        mov rdx, nt_headers_file_header_str
+
+        mov rax, [rbp + 16]                 ; ptr to nt headers file header
+        mov r8w, [rax]
+        mov r9w, [rax + 2]
+        mov r10d, [rax + 4]
+        mov [rsp + 32], r10
+        mov r10d, [rax + 8]
+        mov [rsp + 40], r10
+        mov r10d, [rax + 12]
+        mov [rsp + 48], r10
+        mov r10w, [rax + 16]
+        mov [rsp + 56], r10
+        mov r10w, [rax + 18]
+        mov [rsp + 64], r10
+        call sprintf
+        add rsp, 48                         ; 5 args + 8 byte padding
+
+        mov rcx, [ebp + 24]                 ; ptr to sprintf buffer
+        call strlen
+
+        mov rcx, [rbp + 32]                 ; std handle
+        mov rdx, [rbp + 24]                 ; ptr to sprintf buffer
+        mov r8, rax                         ; strlen
+        call print_string
+
+    .shutdown:
+        mov rax, [rbp - 8]                  ; return value
+
+        leave
+        ret
+
+; arg0: ptr to nt headers optional header   rcx
+; arg1: ptr to sprintf buffer               rdx
+; arg2: std handle                          r8
+print_nt_headers_optional_header:
+        push rbp
+        mov rbp, rsp
+
+        mov [rbp + 16], rcx                 ; ptr to nt headers optional header
+        mov [rbp + 24], rdx                 ; ptr to sprintf buffer
+        mov [rbp + 32], r8                  ; std handle
+
+        ; rbp - 8 = return value
+        ; rbp - 16 = 8 bytes padding
+        sub rsp, 16                         ; allocate local variable space
+        sub rsp, 32                         ; allocate shadow space
+
+        mov qword [rbp - 8], 0              ; return value
+
+        sub rsp, 496
+        mov rcx, [rbp + 24]                 ; ptr to sprintf buffer
+        mov rax, [rbp + 16]                 ; ptr to nt headers optional header
+
+        cmp word [rax], 0x20b               ; is pe 64 bit ?
+        je .64bitOptionalHeader
+
+        ; 32 bit optional header
+        mov rdx, nt_headers_optional_header_32_str
+        mov r8w, [rax]
+        mov r9b, [rax + 2]
+        mov r10b, [rax + 3]
+        mov [rsp + 32], r10
+        mov r10d, [rax + 4]
+        mov [rsp + 40], r10
+        mov r10d, [rax + 8]
+        mov [rsp + 48], r10
+        mov r10d, [rax + 12]
+        mov [rsp + 56], r10
+        mov r10d, [rax + 16]
+        mov [rsp + 64], r10
+        mov r10d, [rax + 20]
+        mov [rsp + 72], r10
+        mov r10d, [rax + 24]
+        mov [rsp + 80], r10
+        mov r10d, [rax + 28]
+        mov [rsp + 88], r10
+        mov r10d, [rax + 32]
+        mov [rsp + 96], r10
+        mov r10d, [rax + 36]
+        mov [rsp + 104], r10
+        mov r10w, [rax + 40]
+        mov [rsp + 112], r10
+        mov r10w, [rax + 42]
+        mov [rsp + 120], r10
+        mov r10w, [rax + 44]
+        mov [rsp + 128], r10
+        mov r10w, [rax + 46]
+        mov [rsp + 136], r10
+        mov r10w, [rax + 48]
+        mov [rsp + 144], r10
+        mov r10w, [rax + 50]
+        mov [rsp + 152], r10
+        mov r10d, [rax + 52]
+        mov [rsp + 160], r10
+        mov r10d, [rax + 56]
+        mov [rsp + 168], r10
+        mov r10d, [rax + 60]
+        mov [rsp + 176], r10
+        mov r10d, [rax + 64]
+        mov [rsp + 184], r10
+        mov r10w, [rax + 68]
+        mov [rsp + 192], r10
+        mov r10w, [rax + 70]
+        mov [rsp + 200], r10
+        mov r10d, [rax + 72]
+        mov [rsp + 208], r10
+        mov r10d, [rax + 76]
+        mov [rsp + 216], r10
+        mov r10d, [rax + 80]
+        mov [rsp + 224], r10
+        mov r10d, [rax + 84]
+        mov [rsp + 232], r10
+        mov r10d, [rax + 88]
+        mov [rsp + 240], r10
+        mov r10d, [rax + 92]
+        mov [rsp + 248], r10
+        mov r10d, [rax + 96]
+        mov [rsp + 256], r10
+        mov r10d, [rax + 100]
+        mov [rsp + 264], r10
+        mov r10d, [rax + 104]
+        mov [rsp + 272], r10
+        mov r10d, [rax + 108]
+        mov [rsp + 280], r10
+        mov r10d, [rax + 112]
+        mov [rsp + 288], r10
+        mov r10d, [rax + 116]
+        mov [rsp + 296], r10
+        mov r10d, [rax + 120]
+        mov [rsp + 304], r10
+        mov r10d, [rax + 124]
+        mov [rsp + 312], r10
+        mov r10d, [rax + 128]
+        mov [rsp + 320], r10
+        mov r10d, [rax + 132]
+        mov [rsp + 328], r10
+        mov r10d, [rax + 136]
+        mov [rsp + 336], r10
+        mov r10d, [rax + 140]
+        mov [rsp + 344], r10
+        mov r10d, [rax + 144]
+        mov [rsp + 352], r10
+        mov r10d, [rax + 148]
+        mov [rsp + 360], r10
+        mov r10d, [rax + 152]
+        mov [rsp + 368], r10
+        mov r10d, [rax + 156]
+        mov [rsp + 376], r10
+        mov r10d, [rax + 160]
+        mov [rsp + 384], r10
+        mov r10d, [rax + 164]
+        mov [rsp + 392], r10
+        mov r10d, [rax + 168]
+        mov [rsp + 400], r10
+        mov r10d, [rax + 172]
+        mov [rsp + 408], r10
+        mov r10d, [rax + 176]
+        mov [rsp + 416], r10
+        mov r10d, [rax + 180]
+        mov [rsp + 424], r10
+        mov r10d, [rax + 184]
+        mov [rsp + 432], r10
+        mov r10d, [rax + 188]
+        mov [rsp + 440], r10
+        mov r10d, [rax + 192]
+        mov [rsp + 448], r10
+        mov r10d, [rax + 196]
+        mov [rsp + 456], r10
+        mov r10d, [rax + 200]
+        mov [rsp + 464], r10
+        mov r10d, [rax + 204]
+        mov [rsp + 472], r10
+        mov r10d, [rax + 208]
+        mov [rsp + 480], r10
+        mov r10d, [rax + 212]
+        mov [rsp + 488], r10
+        mov r10d, [rax + 216]
+        mov [rsp + 496], r10
+        mov r10d, [rax + 220]
+        mov [rsp + 504], r10
+        mov r10d, [rax + 224]
+        mov [rsp + 512], r10
+
+        jmp .continue_after_bit_check
+
+    .64bitOptionalHeader:
+        mov rdx, nt_headers_optional_header_64_str
+        mov r8w, [rax]
+        mov r9b, [rax + 2]
+        mov r10b, [rax + 3]
+        mov [rsp + 32], r10
+        mov r10d, [rax + 4]
+        mov [rsp + 40], r10
+        mov r10d, [rax + 8]
+        mov [rsp + 48], r10
+        mov r10d, [rax + 12]
+        mov [rsp + 56], r10
+        mov r10d, [rax + 16]
+        mov [rsp + 64], r10
+        mov r10d, [rax + 20]
+        mov [rsp + 72], r10
+        mov r10, [rax + 24]
+        mov [rsp + 80], r10
+        mov r10d, [rax + 32]
+        mov [rsp + 88], r10
+        mov r10d, [rax + 36]
+        mov [rsp + 96], r10
+        mov r10w, [rax + 40]
+        mov [rsp + 104], r10
+        mov r10w, [rax + 42]
+        mov [rsp + 112], r10
+        mov r10w, [rax + 44]
+        mov [rsp + 120], r10
+        mov r10w, [rax + 46]
+        mov [rsp + 128], r10
+        mov r10w, [rax + 48]
+        mov [rsp + 136], r10
+        mov r10w, [rax + 50]
+        mov [rsp + 144], r10
+        mov r10d, [rax + 52]
+        mov [rsp + 152], r10
+        mov r10d, [rax + 56]
+        mov [rsp + 160], r10
+        mov r10d, [rax + 60]
+        mov [rsp + 168], r10
+        mov r10d, [rax + 64]
+        mov [rsp + 176], r10
+        mov r10w, [rax + 68]
+        mov [rsp + 184], r10
+        mov r10w, [rax + 70]
+        mov [rsp + 192], r10
+        mov r10, [rax + 72]
+        mov [rsp + 200], r10
+        mov r10, [rax + 80]
+        mov [rsp + 208], r10
+        mov r10, [rax + 88]
+        mov [rsp + 216], r10
+        mov r10, [rax + 96]
+        mov [rsp + 224], r10
+        mov r10d, [rax + 104]
+        mov [rsp + 232], r10
+        mov r10d, [rax + 108]
+        mov [rsp + 240], r10
+        mov r10d, [rax + 112]
+        mov [rsp + 248], r10
+        mov r10d, [rax + 116]
+        mov [rsp + 256], r10
+        mov r10d, [rax + 120]
+        mov [rsp + 264], r10
+        mov r10d, [rax + 124]
+        mov [rsp + 272], r10
+        mov r10d, [rax + 128]
+        mov [rsp + 280], r10
+        mov r10d, [rax + 132]
+        mov [rsp + 288], r10
+        mov r10d, [rax + 136]
+        mov [rsp + 296], r10
+        mov r10d, [rax + 140]
+        mov [rsp + 304], r10
+        mov r10d, [rax + 144]
+        mov [rsp + 312], r10
+        mov r10d, [rax + 148]
+        mov [rsp + 320], r10
+        mov r10d, [rax + 152]
+        mov [rsp + 328], r10
+        mov r10d, [rax + 156]
+        mov [rsp + 336], r10
+        mov r10d, [rax + 160]
+        mov [rsp + 344], r10
+        mov r10d, [rax + 164]
+        mov [rsp + 352], r10
+        mov r10d, [rax + 168]
+        mov [rsp + 360], r10
+        mov r10d, [rax + 172]
+        mov [rsp + 368], r10
+        mov r10d, [rax + 176]
+        mov [rsp + 376], r10
+        mov r10d, [rax + 180]
+        mov [rsp + 384], r10
+        mov r10d, [rax + 184]
+        mov [rsp + 392], r10
+        mov r10d, [rax + 188]
+        mov [rsp + 400], r10
+        mov r10d, [rax + 192]
+        mov [rsp + 408], r10
+        mov r10d, [rax + 196]
+        mov [rsp + 416], r10
+        mov r10d, [rax + 200]
+        mov [rsp + 424], r10
+        mov r10d, [rax + 204]
+        mov [rsp + 432], r10
+        mov r10d, [rax + 208]
+        mov [rsp + 440], r10
+        mov r10d, [rax + 212]
+        mov [rsp + 448], r10
+        mov r10d, [rax + 216]
+        mov [rsp + 456], r10
+        mov r10d, [rax + 220]
+        mov [rsp + 464], r10
+        mov r10d, [rax + 224]
+        mov [rsp + 472], r10
+        mov r10d, [rax + 228]
+        mov [rsp + 480], r10
+        mov r10d, [rax + 232]
+        mov [rsp + 488], r10
+        mov r10d, [rax + 236]
+        mov [rsp + 496], r10
+        mov r10d, [rax + 240]
+        mov [rsp + 504], r10
+
+    .continue_after_bit_check:
+
+        call sprintf
+        add rsp, 496
+
+        mov rcx, [ebp + 24]                 ; ptr to sprintf buffer
+        call strlen
+
+        mov rcx, [rbp + 32]                 ; std handle
+        mov rdx, [rbp + 24]                 ; ptr to sprintf buffer
+        mov r8, rax                         ; strlen
+        call print_string
+
+    .shutdown:
+        mov rax, [rbp - 8]                  ; return value
 
         leave
         ret
@@ -397,7 +785,6 @@ parse_pe:
         jmp .shutdown
 
     .cmp_end:
-
         ; retrive and  save the information to the above stack variables
         mov rbx, [rbp + 16]                             ; base addr
         cmp qword [rbp - 72], 1                         ; print dos header
@@ -409,51 +796,87 @@ parse_pe:
         sub rdx, 8264                                   ; sprintf buffer
         mov r8, [rbp + 32]                              ; std handle
         call print_dos_header
+
     .continue_from_print_dos_header_check:
 
         add rbx, 0x3c                                   ; offset of e_lfanew
-
         movzx eax, word [rbx]                           ; e_lfanew in rax
+
+        cmp qword [ebp - 72], 2                         ; print dos stub
+        jne .continue_from_print_dos_stub_check
+
+        ; print dos stub
+
+    .continue_from_print_dos_stub_check:
 
         mov rbx, [rbp + 16]                             ; base addr
         add rbx, rax                                    ; nt headers
-
         mov [rbp - 16], rbx                             ; nt headers saved
-    
+
+        cmp qword [ebp - 72], 3                         ; print nt headers signature
+        jne .continue_from_nt_headers_signature_check
+
+        ; print nt header signature
+        mov rcx, [rbp - 16]                             ; nt headers
+        mov rdx, rbp
+        sub rdx, 8264                                   ; sprintf buffer
+        mov r8, [rbp + 32]                              ; std handle
+        call print_nt_headers_signature
+       
+    .continue_from_nt_headers_signature_check:
         add rbx, 4                                      ; file header
         mov [rbp - 24], rbx                             ; file header saved
+
+        cmp qword [ebp - 72], 4                         ; print nt headers file header
+        jne .continue_from_nt_headers_file_header_check
+
+        ; print nt headers file header
+        mov rcx, [rbp - 24]                             ; file header
+        mov rdx, rbp
+        sub rdx, 8264                                   ; sprintf buffer
+        mov r8, [rbp + 32]                              ; std handle
+        call print_nt_headers_file_header
+       
+    .continue_from_nt_headers_file_header_check:
 
         add rbx, 20                                     ; optional header
         mov [rbp - 32], rbx                             ; optional header saved
 
-        mov rax, [rbp - 32]                             ; optional header in rax
-        movzx ebx, word [rax]                           ; magic in rbx
-        mov ebx, dword [rax + 16]                       ; entry point in rbx
+        cmp qword [ebp - 72], 5                         ; print nt headers optional header
+        jne .continue_from_nt_headers_optional_header_check
 
-        mov rbx, [rbp - 24]                             ; file header in rbx
-        add rbx, 2
+        ; print nt headers optional header
+        mov rcx, [rbp - 32]                             ; optional header
+        mov rdx, rbp
+        sub rdx, 8264                                   ; sprintf buffer
+        mov r8, [rbp + 32]                              ; std handle
+        call print_nt_headers_optional_header
+
+    .continue_from_nt_headers_optional_header_check:
+        mov rbx, [rbp - 24]                             ; file header
+        add rbx, 2                                      ; section header count
         movzx eax, word [rbx]
-        mov [rbp - 40], rax                             ; section header count saved
+        mov [rbp - 40], rax                             ; section header count
 
-        mov rbx, [rbp - 24]                             ; file header in rbx
-        movzx ebx, word [rbx]
+        mov rax, [rbp - 24]                             ; file header
+        mov ax, word [rax]
 
-        cmp rbx, 0x14c                                  ; is file 32 bit
+        cmp word ax, 0x14c                              ; is file 32 bit
         je .32bit
-            mov rax, [rbp - 32]                         ; optional header in rax
-            add rax, 240                                ; end of optional header
+            mov rax, [rbp - 32]                         ; optional header
+            add rax, 240                                ; end of optional header, start of section headers
 
-            mov [rbp - 48], rax                         ; section headers saved
-            mov qword [rbp - 56], 1                     ; file bitness saved
+            mov [rbp - 48], rax                         ; section headers
+            mov qword [rbp - 56], 1                     ; file bitness saved 1 for 64 bit
 
         jmp .continue_bit_check
 
     .32bit:
         mov rax, [rbp - 32]                             ; optional header in rax
-        add rax, 224                                    ; end of optional header
+        add rax, 224                                    ; end of optional header, start for section headers
 
-        mov [rbp - 48], rax                             ; section headers saved
-        mov qword [rbp - 56], 0                         ; file bitness saved
+        mov [rbp - 48], rax                             ; section headers
+        mov qword [rbp - 56], 0                         ; file bitness saved, 0 for 32 bit
 
     .continue_bit_check:
         ; loop section headers

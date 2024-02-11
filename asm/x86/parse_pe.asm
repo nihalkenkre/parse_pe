@@ -9,17 +9,17 @@ global _parse_pe
 ;
 ; returns offset                    rax > 0
 rva_to_offset:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; [ebp - 4] = return code
-    ; [ebp - 8] = current section header
-    sub esp, 8                                      ; allocate local variable space
+        ; [ebp - 4] = return code
+        ; [ebp - 8] = current section header
+        sub esp, 8                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0                          ; return code
+        mov dword [ebp - 4], 0                          ; return code
 
-    mov ecx, [ebp + 16]                             ; section header count
-    mov edx, [ebp + 12]                             ; section headers
+        mov ecx, [ebp + 16]                             ; section header count
+        mov edx, [ebp + 12]                             ; section headers
 
     .loop:
         mov [ebp - 8], edx                          ; current section header
@@ -49,989 +49,988 @@ rva_to_offset:
 
         mov [ebp - 4], eax                          ; return value
     
-.shutdown:
-    mov eax, [ebp - 4]                              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]                              ; return value
 
-    leave
-    ret 12
+        leave
+        ret 12
 
 ; arg0: import descriptor table rva     [ebp + 8]
 ; arg1: section headers                 [ebp + 12]
 ; arg2: section header count            [ebp + 16]
 ; arg3: base addr file contents         [ebp + 20]
 loop_import_descriptor_table:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    ; ebp - 8 = offset
-    sub esp, 8                                      ; allocate local variable space
+        ; ebp - 4 = return value
+        ; ebp - 8 = offset
+        sub esp, 8                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0                          ; return value
+        mov dword [ebp - 4], 0                          ; return value
 
-    push dword [ebp + 16]                           ; section header count
-    push dword [ebp + 12]                           ; section headers
-    push dword [ebp + 8]                            ; IDT rva
-    call rva_to_offset                              ; offset in eax
+        push dword [ebp + 16]                           ; section header count
+        push dword [ebp + 12]                           ; section headers
+        push dword [ebp + 8]                            ; IDT rva
+        call rva_to_offset                              ; offset in eax
 
-    cmp eax, 0                                      ; offset == 0 ?
-    jle .shutdown
+        cmp eax, 0                                      ; offset == 0 ?
+        jle .shutdown
 
-    mov [ebp - 8], eax                              ; offset
-    mov eax, [ebp + 20]                             ; base addr
-    add eax, [ebp - 8]                              ; base addr + offset
+        mov [ebp - 8], eax                              ; offset
+        mov eax, [ebp + 20]                             ; base addr
+        add eax, [ebp - 8]                              ; base addr + offset
         
-    .loop:
-        add eax, 12                                 ; name RVA
-        cmp dword [eax], 0
-        je .loop_end
+        .loop:
+            add eax, 12                                 ; name RVA
+            cmp dword [eax], 0
+            je .loop_end
 
-        add eax, 8                                  ; next IDT
-        jmp .loop
+            add eax, 8                                  ; next IDT
+            jmp .loop
 
-    ; TODO: Loop through functions of each imported DLL
+        ; TODO: Loop through functions of each imported DLL
 
-.loop_end:
+    .loop_end:
 
-.shutdown:
-    mov eax, [ebp - 4]                              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]                              ; return value
 
-    leave
-    ret 16
+        leave
+        ret 16
 
 ; arg0: export directory table rva      [ebp + 8]
 ; arg1: section headers                 [ebp + 12]
 ; arg2: section header count            [ebp + 16]
 ; arg3: file contents base addr         [ebp + 20]
 loop_export_descriptor_table:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    ; ebp - 8 = offset
-    sub esp, 8                                      ; allocate local variable space
+        ; ebp - 4 = return value
+        ; ebp - 8 = offset
+        sub esp, 8                                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0                          ; return value
+        mov dword [ebp - 4], 0                          ; return value
 
-    push dword [ebp + 16]                           ; section header count
-    push dword [ebp + 12]                           ; section headers
-    push dword [ebp + 8]                            ; IDT rva
-    call rva_to_offset                              ; offset in eax
+        push dword [ebp + 16]                           ; section header count
+        push dword [ebp + 12]                           ; section headers
+        push dword [ebp + 8]                            ; IDT rva
+        call rva_to_offset                              ; offset in eax
 
-    cmp eax, 0                                      ; offset == 0 ?
-    jle .shutdown
+        cmp eax, 0                                      ; offset == 0 ?
+        jle .shutdown
 
-    mov [ebp - 8], eax                              ; offset
-    mov eax, [ebp + 20]                             ; base addr
-    add eax, [ebp - 8]                              ; base + offset
+        mov [ebp - 8], eax                              ; offset
+        mov eax, [ebp + 20]                             ; base addr
+        add eax, [ebp - 8]                              ; base + offset
 
-    mov ecx, [eax + 20]                             ; number of entries in eat
+        mov ecx, [eax + 20]                             ; number of entries in eat
     
-    ; TODO: Loop through exported functions / names
+        ; TODO: Loop through exported functions / names
 
-.shutdown:
-    mov eax, [ebp - 4]                              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]                              ; return value
 
-    leave
-    ret 16
+        leave
+        ret 16
 
 ; arg0: ptr to dos header           [ebp + 8]
 ; arg1: ptr to sprintf buffer       [ebp + 12]
 ; arg2: std handle                  [ebp + 16]
 print_dos_header:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    sub esp, 4                      ; allocate local variable space
-    mov dword [ebp - 4], 0          ; return value
+        ; ebp - 4 = return value
+        sub esp, 4                      ; allocate local variable space
+        mov dword [ebp - 4], 0          ; return value
 
-    mov eax, [ebp + 8]              ; ptr to dos header
+        mov eax, [ebp + 8]              ; ptr to dos header
 
-    push dword [eax + 64]
+        push dword [eax + 64]
 
-    push dword [eax + 60]
-    push dword [eax + 58]
-    push dword [eax + 56]
-    push dword [eax + 54]
-    push dword [eax + 52]
-    push dword [eax + 50]
-    push dword [eax + 48]
-    push dword [eax + 46]
-    push dword [eax + 44]
-    push dword [eax + 42]
-    push dword [eax + 40]
-    push dword [eax + 38]
-    push dword [eax + 36]
-    push dword [eax + 34]
-    push dword [eax + 32]
-    push dword [eax + 30]
-    push dword [eax + 28]
-    push dword [eax + 26]
-    push dword [eax + 24]
-    push dword [eax + 22]
-    push dword [eax + 20]
-    push dword [eax + 18]
-    push dword [eax + 16]
-    push dword [eax + 14]
-    push dword [eax + 12]
-    push dword [eax + 10]
-    push dword [eax + 8]
-    push dword [eax + 6]
-    push dword [eax + 4]
-    push dword [eax + 2]
-    push dword [eax]
+        push dword [eax + 60]
+        push dword [eax + 58]
+        push dword [eax + 56]
+        push dword [eax + 54]
+        push dword [eax + 52]
+        push dword [eax + 50]
+        push dword [eax + 48]
+        push dword [eax + 46]
+        push dword [eax + 44]
+        push dword [eax + 42]
+        push dword [eax + 40]
+        push dword [eax + 38]
+        push dword [eax + 36]
+        push dword [eax + 34]
+        push dword [eax + 32]
+        push dword [eax + 30]
+        push dword [eax + 28]
+        push dword [eax + 26]
+        push dword [eax + 24]
+        push dword [eax + 22]
+        push dword [eax + 20]
+        push dword [eax + 18]
+        push dword [eax + 16]
+        push dword [eax + 14]
+        push dword [eax + 12]
+        push dword [eax + 10]
+        push dword [eax + 8]
+        push dword [eax + 6]
+        push dword [eax + 4]
+        push dword [eax + 2]
+        push dword [eax]
 
-    push dos_header_str
-    push dword [ebp + 12]           ; ptr to sprintf buffer
-    call sprintf
-    add esp, 128
+        push dos_header_str
+        push dword [ebp + 12]           ; ptr to sprintf buffer
+        call sprintf
+        add esp, 128
 
-    push dword [ebp + 12]           ; ptr to sprintf buffer
-    call strlen
+        push dword [ebp + 12]           ; ptr to sprintf buffer
+        call strlen
 
-    push eax                        ; strlen
-    push dword [ebp + 12]           ; ptr to sprintf buffer
-    push dword [ebp + 16]           ; std handle
-    call print_string
+        push eax                        ; strlen
+        push dword [ebp + 12]           ; ptr to sprintf buffer
+        push dword [ebp + 16]           ; std handle
+        call print_string
 
-.shutdown:
-    mov eax, [ebp - 4]              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]              ; return value
 
-    leave
-    ret 12
+        leave
+        ret 12
 
 ; arg0: ptr to nt header            [ebp + 8]
 ; arg1: sprintf buffer              [ebp + 12]
 ; arg2: std handle                  [ebp + 16]
 print_nt_headers_signature:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    sub esp, 4                      ; allocate local variable space
-    mov dword [ebp - 4], 0          ; return value
+        ; ebp - 4 = return value
+        sub esp, 4                      ; allocate local variable space
+        mov dword [ebp - 4], 0          ; return value
 
-    mov eax, [ebp + 8]
-    push dword [eax]                ; ptr to nt headers
-    push nt_headers_signature_str
-    push dword [ebp + 12]           ; sprintf buffer
-    call sprintf
-    add esp, 12
+        mov eax, [ebp + 8]
+        push dword [eax]                ; ptr to nt headers
+        push nt_headers_signature_str
+        push dword [ebp + 12]           ; sprintf buffer
+        call sprintf
+        add esp, 12
 
-    push dword [ebp + 12]           ; sprintf buffer
-    call strlen
+        push dword [ebp + 12]           ; sprintf buffer
+        call strlen
 
-    push eax                        ; strlen
-    push dword [ebp + 12]           ; sprintf buffer
-    push dword [ebp + 16]           ; std handle
-    call print_string
+        push eax                        ; strlen
+        push dword [ebp + 12]           ; sprintf buffer
+        push dword [ebp + 16]           ; std handle
+        call print_string
 
-.shutdown:
-    mov eax, [ebp - 4]              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]              ; return value
 
-    leave
-    ret 12
+        leave
+        ret 12
 
 ; arg0: ptr to nt header file header    [ebp + 8]
 ; arg1: sprintf buffer                  [ebp + 12]
 ; arg2: std handle                      [ebp + 16]
 print_nt_headers_file_header:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    sub esp, 4                      ; allocate local variable space
+        ; ebp - 4 = return value
+        sub esp, 4                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return value
+        mov dword [ebp - 4], 0          ; return value
 
-    mov eax, [ebp + 8]
+        mov eax, [ebp + 8]
     
-    push dword [eax + 20]
-    push dword [eax + 18]
-    push dword [eax + 16]
-    push dword [eax + 12]
-    push dword [eax + 8]
-    push dword [eax + 4]
-    push dword [eax + 2]
-    push dword [eax]                ; ptr to nt headers file header
-    push nt_headers_file_header_str
-    push dword [ebp + 12]           ; sprintf buffer
-    call sprintf
-    add esp, 40
+        push dword [eax + 18]
+        push dword [eax + 16]
+        push dword [eax + 12]
+        push dword [eax + 8]
+        push dword [eax + 4]
+        push dword [eax + 2]
+        push dword [eax]                ; ptr to nt headers file header
+        push nt_headers_file_header_str
+        push dword [ebp + 12]           ; sprintf buffer
+        call sprintf
+        add esp, 40
 
-    push dword [ebp + 12]           ; sprintf buffer
-    call strlen
+        push dword [ebp + 12]           ; sprintf buffer
+        call strlen
     
-    push eax                        ; strlen
-    push dword [ebp + 12]           ; sprintf buffer 
-    push dword [ebp + 16]           ; std handle
-    call print_string
+        push eax                        ; strlen
+        push dword [ebp + 12]           ; sprintf buffer 
+        push dword [ebp + 16]           ; std handle
+        call print_string
 
-.shutdown:
-    mov eax, [ebp - 4]              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]              ; return value
 
-    leave
-    ret 12
+        leave
+        ret 12
 
 ; arg0: ptr to nt header optional header    [ebp + 8]
 ; arg1: sprintf buffer                      [ebp + 12]
 ; arg2: std handle                          [ebp + 16]
 print_nt_headers_optional_header:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    sub esp, 4                      ; allocate local variable space
+        ; ebp - 4 = return value
+        sub esp, 4                      ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return value
+        mov dword [ebp - 4], 0          ; return value
 
-    mov eax, [ebp + 8]              ; nt headers optional header
+        mov eax, [ebp + 8]              ; nt headers optional header
 
-    cmp word [eax], 0x20b           ; is pe 64 bit ?
-    je .64bitOptionalHeader
+        cmp word [eax], 0x20b           ; is pe 64 bit ?
+        je .64bitOptionalHeader
 
-    ; 32 bit optional header
-    push dword [eax + 224]
-    push dword [eax + 220]
-    push dword [eax + 216]
-    push dword [eax + 212]
-    push dword [eax + 208]
-    push dword [eax + 204]
-    push dword [eax + 200]
-    push dword [eax + 196]
-    push dword [eax + 192]
-    push dword [eax + 188]
-    push dword [eax + 184]
-    push dword [eax + 180]
-    push dword [eax + 176]
-    push dword [eax + 172]
-    push dword [eax + 168]
-    push dword [eax + 164]
-    push dword [eax + 160]
-    push dword [eax + 156]
-    push dword [eax + 152]
-    push dword [eax + 148]
-    push dword [eax + 144]
-    push dword [eax + 140]
-    push dword [eax + 136]
-    push dword [eax + 132]
-    push dword [eax + 128]
-    push dword [eax + 124]
-    push dword [eax + 120]
-    push dword [eax + 116]
-    push dword [eax + 112]
-    push dword [eax + 108]
-    push dword [eax + 104]
-    push dword [eax + 100]
-    push dword [eax + 96]
-    push dword [eax + 92]
-    push dword [eax + 88]
-    push dword [eax + 84]
-    push dword [eax + 80]
-    push dword [eax + 76]
-    push dword [eax + 72]
-    push dword [eax + 70]
-    push dword [eax + 68]
-    push dword [eax + 64]
-    push dword [eax + 60]
-    push dword [eax + 56]
-    push dword [eax + 52]
-    push dword [eax + 50]
-    push dword [eax + 48]
-    push dword [eax + 46]
-    push dword [eax + 44]
-    push dword [eax + 42]
-    push dword [eax + 40]
-    push dword [eax + 36]
-    push dword [eax + 32]
-    push dword [eax + 28]
-    push dword [eax + 24]
-    push dword [eax + 20]
-    push dword [eax + 16]
-    push dword [eax + 12]
-    push dword [eax + 8]
-    push dword [eax + 4]
-    push dword [eax + 3]
-    push dword [eax + 2]
-    push dword [eax] 
-    push nt_headers_optional_header_32_str
-    jmp .continue_after_push
+        ; 32 bit optional header
+        push dword [eax + 224]
+        push dword [eax + 220]
+        push dword [eax + 216]
+        push dword [eax + 212]
+        push dword [eax + 208]
+        push dword [eax + 204]
+        push dword [eax + 200]
+        push dword [eax + 196]
+        push dword [eax + 192]
+        push dword [eax + 188]
+        push dword [eax + 184]
+        push dword [eax + 180]
+        push dword [eax + 176]
+        push dword [eax + 172]
+        push dword [eax + 168]
+        push dword [eax + 164]
+        push dword [eax + 160]
+        push dword [eax + 156]
+        push dword [eax + 152]
+        push dword [eax + 148]
+        push dword [eax + 144]
+        push dword [eax + 140]
+        push dword [eax + 136]
+        push dword [eax + 132]
+        push dword [eax + 128]
+        push dword [eax + 124]
+        push dword [eax + 120]
+        push dword [eax + 116]
+        push dword [eax + 112]
+        push dword [eax + 108]
+        push dword [eax + 104]
+        push dword [eax + 100]
+        push dword [eax + 96]
+        push dword [eax + 92]
+        push dword [eax + 88]
+        push dword [eax + 84]
+        push dword [eax + 80]
+        push dword [eax + 76]
+        push dword [eax + 72]
+        push dword [eax + 70]
+        push dword [eax + 68]
+        push dword [eax + 64]
+        push dword [eax + 60]
+        push dword [eax + 56]
+        push dword [eax + 52]
+        push dword [eax + 50]
+        push dword [eax + 48]
+        push dword [eax + 46]
+        push dword [eax + 44]
+        push dword [eax + 42]
+        push dword [eax + 40]
+        push dword [eax + 36]
+        push dword [eax + 32]
+        push dword [eax + 28]
+        push dword [eax + 24]
+        push dword [eax + 20]
+        push dword [eax + 16]
+        push dword [eax + 12]
+        push dword [eax + 8]
+        push dword [eax + 4]
+        push dword [eax + 3]
+        push dword [eax + 2]
+        push dword [eax] 
+        push nt_headers_optional_header_32_str
+        jmp .continue_after_push
 
-.64bitOptionalHeader:
-    push dword [eax + 240]
-    push dword [eax + 236]
-    push dword [eax + 232]
-    push dword [eax + 228]
-    push dword [eax + 224]
-    push dword [eax + 220]
-    push dword [eax + 216]
-    push dword [eax + 212]
-    push dword [eax + 208]
-    push dword [eax + 204]
-    push dword [eax + 200]
-    push dword [eax + 196]
-    push dword [eax + 192]
-    push dword [eax + 188]
-    push dword [eax + 184]
-    push dword [eax + 180]
-    push dword [eax + 176]
-    push dword [eax + 172]
-    push dword [eax + 168]
-    push dword [eax + 164]
-    push dword [eax + 160]
-    push dword [eax + 156]
-    push dword [eax + 152]
-    push dword [eax + 148]
-    push dword [eax + 144]
-    push dword [eax + 140]
-    push dword [eax + 136]
-    push dword [eax + 132]
-    push dword [eax + 128]
-    push dword [eax + 124]
-    push dword [eax + 120]
-    push dword [eax + 116]
-    push dword [eax + 112]
-    push dword [eax + 108]
-    push dword [eax + 104]
-    push dword [eax + 96]
-    push dword [eax + 100]
-    push dword [eax + 88]
-    push dword [eax + 92]
-    push dword [eax + 80]
-    push dword [eax + 84]
-    push dword [eax + 72]
-    push dword [eax + 76]
-    push dword [eax + 70]
-    push dword [eax + 68]
-    push dword [eax + 64]
-    push dword [eax + 60]
-    push dword [eax + 56]
-    push dword [eax + 52]
-    push dword [eax + 50]
-    push dword [eax + 48]
-    push dword [eax + 46]
-    push dword [eax + 44]
-    push dword [eax + 42]
-    push dword [eax + 40]
-    push dword [eax + 36]
-    push dword [eax + 32]
-    push dword [eax + 24]
-    push dword [eax + 28]
-    push dword [eax + 20]
-    push dword [eax + 16]
-    push dword [eax + 12]
-    push dword [eax + 8]
-    push dword [eax + 4]
-    push dword [eax + 3]
-    push dword [eax + 2]
-    push dword [eax] 
-    push nt_headers_optional_header_64_str
+    .64bitOptionalHeader:
+        push dword [eax + 240]
+        push dword [eax + 236]
+        push dword [eax + 232]
+        push dword [eax + 228]
+        push dword [eax + 224]
+        push dword [eax + 220]
+        push dword [eax + 216]
+        push dword [eax + 212]
+        push dword [eax + 208]
+        push dword [eax + 204]
+        push dword [eax + 200]
+        push dword [eax + 196]
+        push dword [eax + 192]
+        push dword [eax + 188]
+        push dword [eax + 184]
+        push dword [eax + 180]
+        push dword [eax + 176]
+        push dword [eax + 172]
+        push dword [eax + 168]
+        push dword [eax + 164]
+        push dword [eax + 160]
+        push dword [eax + 156]
+        push dword [eax + 152]
+        push dword [eax + 148]
+        push dword [eax + 144]
+        push dword [eax + 140]
+        push dword [eax + 136]
+        push dword [eax + 132]
+        push dword [eax + 128]
+        push dword [eax + 124]
+        push dword [eax + 120]
+        push dword [eax + 116]
+        push dword [eax + 112]
+        push dword [eax + 108]
+        push dword [eax + 104]
+        push dword [eax + 96]
+        push dword [eax + 100]
+        push dword [eax + 88]
+        push dword [eax + 92]
+        push dword [eax + 80]
+        push dword [eax + 84]
+        push dword [eax + 72]
+        push dword [eax + 76]
+        push dword [eax + 70]
+        push dword [eax + 68]
+        push dword [eax + 64]
+        push dword [eax + 60]
+        push dword [eax + 56]
+        push dword [eax + 52]
+        push dword [eax + 50]
+        push dword [eax + 48]
+        push dword [eax + 46]
+        push dword [eax + 44]
+        push dword [eax + 42]
+        push dword [eax + 40]
+        push dword [eax + 36]
+        push dword [eax + 32]
+        push dword [eax + 24]
+        push dword [eax + 28]
+        push dword [eax + 20]
+        push dword [eax + 16]
+        push dword [eax + 12]
+        push dword [eax + 8]
+        push dword [eax + 4]
+        push dword [eax + 3]
+        push dword [eax + 2]
+        push dword [eax] 
+        push nt_headers_optional_header_64_str
 
-.continue_after_push:
+    .continue_after_push:
 
-    push dword [ebp + 12]           ; sprintf buffer
-    call sprintf
+        push dword [ebp + 12]           ; sprintf buffer
+        call sprintf
 
-    mov eax, [ebp + 8]              ; nt headers optional header
-    cmp word [eax], 0x20b           ; is pe 64 bit ?
-    je .clear_64bit_stack
+        mov eax, [ebp + 8]              ; nt headers optional header
+        cmp word [eax], 0x20b           ; is pe 64 bit ?
+        je .clear_64bit_stack
 
-    add esp, 260
-    jmp .continue_after_stack_clear
+        add esp, 260
+        jmp .continue_after_stack_clear
 
-.clear_64bit_stack:
-    add esp, 280
+    .clear_64bit_stack:
+        add esp, 280
 
-.continue_after_stack_clear:
-    push dword [ebp + 12]           ; sprintf buffer
-    call strlen
+    .continue_after_stack_clear:
+        push dword [ebp + 12]           ; sprintf buffer
+        call strlen
     
-    push eax                        ; strlen
-    push dword [ebp + 12]           ; sprintf buffer 
-    push dword [ebp + 16]           ; std handle
-    call print_string
+        push eax                        ; strlen
+        push dword [ebp + 12]           ; sprintf buffer 
+        push dword [ebp + 16]           ; std handle
+        call print_string
 
-.shutdown:
-    mov eax, [ebp - 4]              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]              ; return value
 
-    leave
-    ret 12
+        leave
+        ret 12
 
 ; arg0: ptr to section headers      [ebp + 8]
 ; arg1: section header count        [ebp + 12]
 ; arg2: sprintf buffer              [ebp + 16]
 ; arg3: std handle                  [ebp + 20]
 print_section_headers:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    ; ebp - 8 = current section header addr
-    ; ebp - 12 = current section index reverse
-    sub esp, 12                     ; allocate local variable space
+        ; ebp - 4 = return value
+        ; ebp - 8 = current section header addr
+        ; ebp - 12 = current section index reverse
+        sub esp, 12                     ; allocate local variable space
 
-    mov dword [ebp - 4], 0          ; return value
-    mov ecx, [ebp + 12]             ; section header count
-    mov [ebp - 12], ecx             ; section header index reverse
+        mov dword [ebp - 4], 0          ; return value
+        mov ecx, [ebp + 12]             ; section header count
+        mov [ebp - 12], ecx             ; section header index reverse
 
-    mov eax, [ebp + 8]              ; section headers
-    mov [ebp - 8], eax              ; current section header addr
-.loop:
-    mov eax, [ebp - 8]              ; current section header addr
+        mov eax, [ebp + 8]              ; section headers
+        mov [ebp - 8], eax              ; current section header addr
+    .loop:
+        mov eax, [ebp - 8]              ; current section header addr
 
-    push dword [eax + 40]
-    push dword [eax + 36]
-    push dword [eax + 34]
-    push dword [eax + 32]
-    push dword [eax + 28]
-    push dword [eax + 24]
-    push dword [eax + 20]
-    push dword [eax + 16]
-    push dword [eax + 12]
-    push dword [eax + 8]
-    push dword eax
-    push section_headers_str
-    push dword [ebp + 16]           ; sprintf buffer
-    call sprintf
+        push dword [eax + 40]
+        push dword [eax + 36]
+        push dword [eax + 34]
+        push dword [eax + 32]
+        push dword [eax + 28]
+        push dword [eax + 24]
+        push dword [eax + 20]
+        push dword [eax + 16]
+        push dword [eax + 12]
+        push dword [eax + 8]
+        push dword eax
+        push section_headers_str
+        push dword [ebp + 16]           ; sprintf buffer
+        call sprintf
 
-    push dword [ebp + 16]           ; sprintf buffer
-    call strlen
+        push dword [ebp + 16]           ; sprintf buffer
+        call strlen
 
-    push eax                        ; strlen
-    push dword [ebp + 16]           ; sprintf buffer 
-    push dword [ebp + 20]           ; std handle
-    call print_string
+        push eax                        ; strlen
+        push dword [ebp + 16]           ; sprintf buffer 
+        push dword [ebp + 20]           ; std handle
+        call print_string
 
-    add dword [ebp - 8], 40         ; current section header addr
-    dec dword [ebp - 12]            ; current section header index reverse
+        add dword [ebp - 8], 40         ; current section header addr
+        dec dword [ebp - 12]            ; current section header index reverse
 
-    jnz .loop
+        jnz .loop
 
-.shutdown:
-    mov eax, [ebp - 4]              ; return value
+    .shutdown:
+        mov eax, [ebp - 4]              ; return value
     
-    leave
-    ret 16
+        leave
+        ret 16
 
 ; arg0: base addr file contents     [ebp + 8]
 ; arg1: Options                     [ebp + 12]
 ; arg2: std handle                  [ebp + 16]
 parse_pe:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = return value
-    ; ebp - 8 = nt header
-    ; ebp - 12 = file header
-    ; ebp - 16 = optional header
-    ; ebp - 20 = section header count
-    ; ebp - 24 = section headers
-    ; ebp - 28 = file bitness 1: 64 bit, 0: 32 bit
-    ; ebp - 32 = ebx
-    ; ebp - 36 = options enum;  1 = dos header, 2 = dos stub, 3 = signature
-    ;                           4 = file header, 5 = optional header, 6 = section header
-    ;                           7 = export directory, 8 = import directory
-    ; ebp - 8228 = 8192 byte buffer for sprintf
-    sub esp, 8228                                   ; allocate local variable space
-    mov dword [ebp - 4], 0                          ; return value
-    mov [ebp - 32], ebx                             ; save ebx
+        ; ebp - 4 = return value
+        ; ebp - 8 = nt header
+        ; ebp - 12 = file header
+        ; ebp - 16 = optional header
+        ; ebp - 20 = section header count
+        ; ebp - 24 = section headers
+        ; ebp - 28 = file bitness 1: 64 bit, 0: 32 bit
+        ; ebp - 32 = ebx
+        ; ebp - 36 = options enum;  1 = dos header, 2 = dos stub, 3 = signature
+        ;                           4 = file header, 5 = optional header, 6 = section header
+        ;                           7 = export directory, 8 = import directory
+        ; ebp - 8228 = 8192 byte buffer for sprintf
+        sub esp, 8228                                   ; allocate local variable space
+        mov dword [ebp - 4], 0                          ; return value
+        mov [ebp - 32], ebx                             ; save ebx
 
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push dos_header_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_dos_stub
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push dos_header_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_dos_stub
 
-    mov dword [ebp - 36], 1                         ; dos header enum
-    jmp .cmp_end
+        mov dword [ebp - 36], 1                         ; dos header enum
+        jmp .cmp_end
 
-.cmp_dos_stub:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push dos_stub_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_nt_headers_signature
+    .cmp_dos_stub:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push dos_stub_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_nt_headers_signature
 
-    mov dword [ebp - 36], 2                         ; dos stub
-    jmp .cmp_end
+        mov dword [ebp - 36], 2                         ; dos stub
+        jmp .cmp_end
 
-.cmp_nt_headers_signature:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push nt_headers_signature_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_nt_headers_file_header
+    .cmp_nt_headers_signature:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push nt_headers_signature_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_nt_headers_file_header
 
-    mov dword [ebp - 36], 3                         ; dos stub enum
-    jmp .cmp_end
+        mov dword [ebp - 36], 3                         ; dos stub enum
+        jmp .cmp_end
 
-.cmp_nt_headers_file_header:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push nt_headers_file_header_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_nt_headers_optional_header
+    .cmp_nt_headers_file_header:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push nt_headers_file_header_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_nt_headers_optional_header
 
-    mov dword [ebp - 36], 4                         ; nt headers file header enum
-    jmp .cmp_end
+        mov dword [ebp - 36], 4                         ; nt headers file header enum
+        jmp .cmp_end
 
-.cmp_nt_headers_optional_header:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push nt_headers_optional_header_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_section_headers
+    .cmp_nt_headers_optional_header:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push nt_headers_optional_header_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_section_headers
 
-    mov dword [ebp - 36], 5                         ; nt headers optional header enum
-    jmp .cmp_end
+        mov dword [ebp - 36], 5                         ; nt headers optional header enum
+        jmp .cmp_end
 
-.cmp_section_headers:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push section_headers_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_exported_functions
+    .cmp_section_headers:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push section_headers_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_exported_functions
 
-    mov dword [ebp - 36], 6                         ; section headers enum
-    jmp .cmp_end
+        mov dword [ebp - 36], 6                         ; section headers enum
+        jmp .cmp_end
 
-.cmp_exported_functions:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push exported_functions_arg
-    call strcmpAA
-    cmp eax, 0
-    je .cmp_imported_functions
+    .cmp_exported_functions:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push exported_functions_arg
+        call strcmpAA
+        cmp eax, 0
+        je .cmp_imported_functions
 
-    mov dword [ebp - 36], 7                         ; export directory
-    jmp .cmp_end
+        mov dword [ebp - 36], 7                         ; export directory
+        jmp .cmp_end
 
-.cmp_imported_functions:
-    mov eax, [ebp + 12]                             ; *Options
-    mov eax, [eax]
-    push eax                                        ; Options
-    push imported_functions_arg
-    call strcmpAA
-    cmp eax, 0
-    je .options_arg_err
+    .cmp_imported_functions:
+        mov eax, [ebp + 12]                             ; *Options
+        mov eax, [eax]
+        push eax                                        ; Options
+        push imported_functions_arg
+        call strcmpAA
+        cmp eax, 0
+        je .options_arg_err
 
-    mov dword [ebp - 36], 8                         ; import directory
+        mov dword [ebp - 36], 8                         ; import directory
 
-    jmp .cmp_end
+        jmp .cmp_end
 
-.options_arg_err:
-    push ret_val_1_str.len
-    push ret_val_1_str
-    push dword [ebp + 16]                           ; std handle
-    call print_string
+    .options_arg_err:
+        push ret_val_1_str.len
+        push ret_val_1_str
+        push dword [ebp + 16]                           ; std handle
+        call print_string
 
-    jmp .shutdown
+        jmp .shutdown
 
-.cmp_end:
-    ; retrive and save the information
-    mov ebx, [ebp + 8]                              ; base addr
-    cmp dword [ebp - 36], 1                         ; print dos header
-    jne .continue_from_print_dos_header_check
+    .cmp_end:
+        ; retrive and save the information
+        mov ebx, [ebp + 8]                              ; base addr
+        cmp dword [ebp - 36], 1                         ; print dos header
+        jne .continue_from_print_dos_header_check
 
-    ; print dos header
-    push dword [ebp + 16]                           ; std handle
-    mov eax, ebp
-    sub eax, 8228                                   ; sprintf buffer
-    push eax
-    push [ebp + 8]                                  ; base addr
-    call print_dos_header
+        ; print dos header
+        push dword [ebp + 16]                           ; std handle
+        mov eax, ebp
+        sub eax, 8228                                   ; sprintf buffer
+        push eax
+        push [ebp + 8]                                  ; base addr
+        call print_dos_header
 
-.continue_from_print_dos_header_check:
+    .continue_from_print_dos_header_check:
 
-    add ebx, 0x3c                                   ; offset of e_lfanew
-    movzx eax, word [ebx]                           ; e_lfanew
+        add ebx, 0x3c                                   ; offset of e_lfanew
+        movzx eax, word [ebx]                           ; e_lfanew
 
-    cmp dword [ebp - 36], 2                         ; print dos stub
-    jne .continue_from_print_dos_stub_check
+        cmp dword [ebp - 36], 2                         ; print dos stub
+        jne .continue_from_print_dos_stub_check
 
-    ; print dos stub
+        ; print dos stub
 
-.continue_from_print_dos_stub_check:
+    .continue_from_print_dos_stub_check:
 
-    mov ebx, [ebp + 8]
-    add ebx, eax                                    ; nt headers
-    mov [ebp - 8], ebx                              ; nt headers saved
+        mov ebx, [ebp + 8]
+        add ebx, eax                                    ; nt headers
+        mov [ebp - 8], ebx                              ; nt headers saved
 
-    cmp dword [ebp - 36], 3                         ; print nt headers signature
-    jne .continue_from_nt_headers_signature_check
+        cmp dword [ebp - 36], 3                         ; print nt headers signature
+        jne .continue_from_nt_headers_signature_check
     
-    ; print nt headers signature
-    push dword [ebp + 16]                           ; std handle
-    mov eax, ebp
-    sub eax, 8228                                   ; sprintf buffer
-    push eax
-    push dword [ebp - 8]                            ; nt headers
-    call print_nt_headers_signature
+        ; print nt headers signature
+        push dword [ebp + 16]                           ; std handle
+        mov eax, ebp
+        sub eax, 8228                                   ; sprintf buffer
+        push eax
+        push dword [ebp - 8]                            ; nt headers
+        call print_nt_headers_signature
 
-.continue_from_nt_headers_signature_check:
-    add ebx, 4                                      ; file header
-    mov [ebp - 12], ebx                             ; file header saved
+    .continue_from_nt_headers_signature_check:
+        add ebx, 4                                      ; file header
+        mov [ebp - 12], ebx                             ; file header saved
 
-    cmp dword [ebp - 36], 4                         ; print nt headers file header
-    jne .continue_from_nt_headers_file_header_check
+        cmp dword [ebp - 36], 4                         ; print nt headers file header
+        jne .continue_from_nt_headers_file_header_check
 
-    ; print nt headers file header
-    push dword [ebp + 16]                           ; std handle
-    mov eax, ebp
-    sub eax, 8228                                   ; sprintf buffer
-    push eax
-    push dword [ebp - 12]                           ; nt headers file header
-    call print_nt_headers_file_header
+        ; print nt headers file header
+        push dword [ebp + 16]                           ; std handle
+        mov eax, ebp
+        sub eax, 8228                                   ; sprintf buffer
+        push eax
+        push dword [ebp - 12]                           ; nt headers file header
+        call print_nt_headers_file_header
 
-.continue_from_nt_headers_file_header_check:
-    add ebx, 20                                     ; optional header
-    mov [ebp - 16], ebx                             ; optional header saved
+    .continue_from_nt_headers_file_header_check:
+        add ebx, 20                                     ; optional header
+        mov [ebp - 16], ebx                             ; optional header saved
 
-    cmp dword [ebp - 36], 5                         ; print nt headers optional header
-    jne .continue_from_nt_headers_optional_header_check
+        cmp dword [ebp - 36], 5                         ; print nt headers optional header
+        jne .continue_from_nt_headers_optional_header_check
 
-    ; print nt headers optional header
-    push dword [ebp + 16]                           ; std handle
-    mov eax, ebp
-    sub eax, 8228                                   ; sprintf buffer
-    push eax
-    push dword [ebp - 16]                           ; nt headers optional header
-    call print_nt_headers_optional_header
+        ; print nt headers optional header
+        push dword [ebp + 16]                           ; std handle
+        mov eax, ebp
+        sub eax, 8228                                   ; sprintf buffer
+        push eax
+        push dword [ebp - 16]                           ; nt headers optional header
+        call print_nt_headers_optional_header
 
-.continue_from_nt_headers_optional_header_check:
-    mov ebx, [ebp - 12]                             ; file header
-    add ebx, 2                                      ; section header count
-    movzx eax, word [ebx]
-    mov [ebp - 20], eax                             ; section header count saved
+    .continue_from_nt_headers_optional_header_check:
+        mov ebx, [ebp - 12]                             ; file header
+        add ebx, 2                                      ; section header count
+        movzx eax, word [ebx]
+        mov [ebp - 20], eax                             ; section header count saved
 
-    mov eax, [ebp - 12]                             ; file header
-    mov ax, [eax]
-    cmp word ax, 0x14c                              ; is file 32 bit
-    je .32bit
-        mov eax, [ebp - 16]                         ; optional header
-        add eax, 240                                ; end of optional header, start of section headers
+        mov eax, [ebp - 12]                             ; file header
+        mov ax, [eax]
+        cmp word ax, 0x14c                              ; is file 32 bit
+        je .32bit
+            mov eax, [ebp - 16]                         ; optional header
+            add eax, 240                                ; end of optional header, start of section headers
 
-        mov [ebp - 24], eax                         ; section headers
-        mov dword [ebp - 28], 1                     ; file bitness 1 for 64 bit
+            mov [ebp - 24], eax                         ; section headers
+            mov dword [ebp - 28], 1                     ; file bitness 1 for 64 bit
 
-        jmp .continue_32_bit
+            jmp .continue_32_bit
 
-    .32bit:
-        mov eax, [ebp - 16]                         ; optional header
-        add eax, 224                                ; end of optional header, start of section header
+        .32bit:
+            mov eax, [ebp - 16]                         ; optional header
+            add eax, 224                                ; end of optional header, start of section header
 
-        mov [ebp - 24], eax                         ; section headers
-        mov dword [ebp - 24], 0                     ; file bitness 0 for 32 bit
+            mov [ebp - 24], eax                         ; section headers
+            mov dword [ebp - 24], 0                     ; file bitness 0 for 32 bit
 
-.continue_32_bit:
+    .continue_32_bit:
 
-    cmp dword [ebp - 36], 6                         ; print section headers
-    jne .continue_from_section_header_check
-    push dword [ebp + 16]                           ; std handle
-    mov eax, ebp
-    sub eax, 8228                                   ; sprintf buffer
-    push eax
-    push dword [ebp - 20]                           ; section header count
-    push dword [ebp - 24]                           ; section headers
-    call print_section_headers
+        cmp dword [ebp - 36], 6                         ; print section headers
+        jne .continue_from_section_header_check
+        push dword [ebp + 16]                           ; std handle
+        mov eax, ebp
+        sub eax, 8228                                   ; sprintf buffer
+        push eax
+        push dword [ebp - 20]                           ; section header count
+        push dword [ebp - 24]                           ; section headers
+        call print_section_headers
 
-.continue_from_section_header_check:
+    .continue_from_section_header_check:
 
-.idt:
-    ; loop IDT
-    mov eax, [ebp - 16]                             ; optional header
+    .idt:
+        ; loop IDT
+        mov eax, [ebp - 16]                             ; optional header
 
-    cmp dword [ebp - 28], 0                         ; is file 32 bit
-    je .32bitidt
-        add eax, 120                                ; IDT
-        mov eax, [eax]
+        cmp dword [ebp - 28], 0                         ; is file 32 bit
+        je .32bitidt
+            add eax, 120                                ; IDT
+            mov eax, [eax]
 
-        cmp eax, 0                                  ; if IDT rva == 0 ?
+            cmp eax, 0                                  ; if IDT rva == 0 ?
 
-        je .edt
-        jmp .continue_bitcheck_idt
+            je .edt
+            jmp .continue_bitcheck_idt
 
-    .32bitidt:
-        add eax, 104                                ; IDT
-        mov eax, [eax]
+        .32bitidt:
+            add eax, 104                                ; IDT
+            mov eax, [eax]
 
-        cmp eax, 0                                  ; if IDT rva == 0 ?
+            cmp eax, 0                                  ; if IDT rva == 0 ?
 
-        je .edt
+            je .edt
 
-.continue_bitcheck_idt:
-    push dword [ebp + 8]                            ; base addr
-    push dword [ebp - 20]                           ; section header count
-    push dword [ebp - 24]                           ; section headers
-    push eax                                        ; IDT rva
-    call loop_import_descriptor_table
+    .continue_bitcheck_idt:
+        push dword [ebp + 8]                            ; base addr
+        push dword [ebp - 20]                           ; section header count
+        push dword [ebp - 24]                           ; section headers
+        push eax                                        ; IDT rva
+        call loop_import_descriptor_table
 
-.edt:
-    ; loop EDT
-    mov eax, [ebp - 16]                             ; optional header
+    .edt:
+        ; loop EDT
+        mov eax, [ebp - 16]                             ; optional header
 
-    cmp dword [ebp - 28], 0                         ; is file 32 bit
-    je .32bitedt
-        add eax, 112                                ; EDT
-        mov eax, [eax]
+        cmp dword [ebp - 28], 0                         ; is file 32 bit
+        je .32bitedt
+            add eax, 112                                ; EDT
+            mov eax, [eax]
 
-        cmp eax, 0                                  ; if EDT rva == 0 ?
+            cmp eax, 0                                  ; if EDT rva == 0 ?
 
-        je .shutdown
-        jmp .continue_bitcheck_edt
+            je .shutdown
+            jmp .continue_bitcheck_edt
 
-    .32bitedt:
-        add eax, 96                                 ; EDT
-        mov eax, [eax]
+        .32bitedt:
+            add eax, 96                                 ; EDT
+            mov eax, [eax]
 
-        cmp eax, 0                                  ; if EDT rva == 0 ?
+            cmp eax, 0                                  ; if EDT rva == 0 ?
 
-        je .shutdown
+            je .shutdown
 
-.continue_bitcheck_edt:
-    push dword [ebp + 8]                            ; base addr
-    push dword [ebp - 20]                           ; section header count
-    push dword [ebp - 24]                           ; section headers
-    push eax                                        ; EDT rva
-    call loop_export_descriptor_table
+    .continue_bitcheck_edt:
+        push dword [ebp + 8]                            ; base addr
+        push dword [ebp - 20]                           ; section header count
+        push dword [ebp - 24]                           ; section headers
+        push eax                                        ; EDT rva
+        call loop_export_descriptor_table
 
-.shutdown:
+    .shutdown:
 
-    mov eax, [ebp - 4]                              ; return value
-    mov ebx, [ebp - 32]                             ; restore ebx
+        mov eax, [ebp - 4]                              ; return value
+        mov ebx, [ebp - 32]                             ; restore ebx
 
-    leave
-    ret 8
+        leave
+        ret 8
 
 ; arg0: argc        [ebp + 8]
 ; arg1: *argv[]     [ebp + 12]
 _parse_pe:
-    push ebp
-    mov ebp, esp
+        push ebp
+        mov ebp, esp
 
-    ; ebp - 4 = retuen value
-    ; ebp - 148 = OFFILESTRUCT
-    ; ebp - 152 = file handle
-    ; ebp - 156 = getfilesize high order dw of file size
-    ; ebp - 160 = getfilesize low order dw of file size
-    ; ebp - 164 = allocated mem for input file read
-    ; ebp - 168 = kernel handle
-    ; ebp - 172 = std handle
-    ; ebp - 176 = shlwapi addr
-    sub esp, 176                                    ; allocate local variable space
+        ; ebp - 4 = retuen value
+        ; ebp - 148 = OFFILESTRUCT
+        ; ebp - 152 = file handle
+        ; ebp - 156 = getfilesize high order dw of file size
+        ; ebp - 160 = getfilesize low order dw of file size
+        ; ebp - 164 = allocated mem for input file read
+        ; ebp - 168 = kernel handle
+        ; ebp - 172 = std handle
+        ; ebp - 176 = shlwapi addr
+        sub esp, 176                                    ; allocate local variable space
 
-    mov dword [ebp - 4], 0                          ; return value
+        mov dword [ebp - 4], 0                          ; return value
 
-    call get_kernel_module_handle
-    mov [ebp - 168], eax                            ; kernel handle
+        call get_kernel_module_handle
+        mov [ebp - 168], eax                            ; kernel handle
 
-    push dword [ebp - 168]                          ; kernel handle
-    call populate_kernel_function_ptrs_by_name
+        push dword [ebp - 168]                          ; kernel handle
+        call populate_kernel_function_ptrs_by_name
 
-    push STD_HANDLE_ENUM
-    call [get_std_handle]
+        push STD_HANDLE_ENUM
+        call [get_std_handle]
 
-    mov [ebp - 172], eax                            ; std handle
+        mov [ebp - 172], eax                            ; std handle
 
-    ; check if 2 args are passed to the exe
-    cmp dword [ebp + 8], 3                          ; argc == 3 ?
-    je .continue_argc_check
+        ; check if 2 args are passed to the exe
+        cmp dword [ebp + 8], 3                          ; argc == 3 ?
+        je .continue_argc_check
 
-    push ret_val_1_str.len
-    push ret_val_1_str
-    push dword [ebp - 172]                          ; std handle
-    call print_string
-
-    call [get_last_error]
-
-    mov dword [ebp - 4], 1                          ; return value
-
-    jmp .shutdown
-
-.continue_argc_check:
-
-    push xor_key.len
-    push xor_key
-    push shlwapi_xor.len
-    push shlwapi_xor
-    call my_xor
-
-    push shlwapi_xor
-    call [load_library_a]
-
-    cmp eax, 0
-    je .shutdown
-
-    mov [ebp - 176], eax                            ; shlwapi addr
-
-    push xor_key.len
-    push xor_key
-    push path_file_exists_a_xor.len
-    push path_file_exists_a_xor
-    call my_xor
-
-    push path_file_exists_a_xor
-    push dword [ebp - 176]                          ; shlwapi addr
-    call get_proc_address_by_get_proc_addr
-
-    cmp eax, 0
-    je .shutdown
-
-    mov [path_file_exists_a], eax
-
-    mov edx, [ebp + 12]                             ; argv in edx
-    mov edx, [edx + 4]                              ; argv[1] in edx
-
-    push edx
-    call [path_file_exists_a]
-
-    cmp eax, 1                                      ; does file exist
-    je .continue_path_file_check
-        push ret_val_2_str.len
-        push ret_val_2_str
-        push dword [ebp - 172]                      ; std handle
+        push ret_val_1_str.len
+        push ret_val_1_str
+        push dword [ebp - 172]                          ; std handle
         call print_string
 
         call [get_last_error]
 
-        mov dword [ebp - 4], 2
+        mov dword [ebp - 4], 1                          ; return value
 
         jmp .shutdown
 
-.continue_path_file_check:
-    push 0
+    .continue_argc_check:
 
-    mov edx, esp
-    sub edx, 148                                    ; OFFILESTRUCT
-    push edx
+        push xor_key.len
+        push xor_key
+        push shlwapi_xor.len
+        push shlwapi_xor
+        call my_xor
 
-    mov edx, [ebp + 12]                             ; argv
-    add edx, 4                                      ; argv + 1
-    push dword [edx]                                ; argv[1]
+        push shlwapi_xor
+        call [load_library_a]
 
-    call [open_file]                                ; file handle in eax
+        cmp eax, 0
+        je .shutdown
 
-    cmp eax, INVALID_HANDLE_VALUE
-    jne .continue_open_file
-        push ret_val_3_open_file_str.len
-        push ret_val_3_open_file_str
-        push dword [ebp - 172]                      ; std handle
-        call print_string
+        mov [ebp - 176], eax                            ; shlwapi addr
 
-        call [get_last_error]
+        push xor_key.len
+        push xor_key
+        push path_file_exists_a_xor.len
+        push path_file_exists_a_xor
+        call my_xor
 
-        mov dword [ebp - 4], 3
+        push path_file_exists_a_xor
+        push dword [ebp - 176]                          ; shlwapi addr
+        call get_proc_address_by_get_proc_addr
 
-        jmp .shutdown
+        cmp eax, 0
+        je .shutdown
 
-.continue_open_file:
-    mov [ebp - 152], eax                            ; file handle
+        mov [path_file_exists_a], eax
 
-    mov edx, ebp
-    sub edx, 156                                    ; file size high order dword
-    push edx
+        mov edx, [ebp + 12]                             ; argv in edx
+        mov edx, [edx + 4]                              ; argv[1] in edx
 
-    push dword [ebp - 152]                          ; file handle
-    call [get_file_size]                            ; file size in eax
+        push edx
+        call [path_file_exists_a]
 
-    cmp eax, INVALID_FILE_SIZE
-    jne .continue_get_file_size
-        push ret_val_4_get_file_size_str.len
-        push ret_val_4_get_file_size_str
-        push dword [ebp - 172]                      ; std handle
-        call print_string
+        cmp eax, 1                                      ; does file exist
+        je .continue_path_file_check
+            push ret_val_2_str.len
+            push ret_val_2_str
+            push dword [ebp - 172]                      ; std handle
+            call print_string
 
-        call [get_last_error]
+            call [get_last_error]
 
-        mov dword [ebp - 4], 4                      ; return value
+            mov dword [ebp - 4], 2
 
-        jmp .shutdown
+            jmp .shutdown
 
-.continue_get_file_size:
-    mov [ebp - 160], eax                            ; file size saved
+    .continue_path_file_check:
+        push 0
 
-    mov edx, PAGE_READWRITE
-    push edx
+        mov edx, esp
+        sub edx, 148                                    ; OFFILESTRUCT
+        push edx
 
-    mov edx, MEM_RESERVE
-    or edx, MEM_COMMIT
-    push edx
+        mov edx, [ebp + 12]                             ; argv
+        add edx, 4                                      ; argv + 1
+        push dword [edx]                                ; argv[1]
 
-    push dword [ebp - 160]                          ; file size
-    push 0
-    call [virtual_alloc]
+        call [open_file]                                ; file handle in eax
 
-    cmp eax, 0                                      ; if addr is 0
-    jne .continue_virtual_alloc
-        push ret_val_5_virtual_alloc_str.len
-        push ret_val_5_virtual_alloc_str
-        push dword [ebp - 172]                      ; std handle
-        call print_string
+        cmp eax, INVALID_HANDLE_VALUE
+        jne .continue_open_file
+            push ret_val_3_open_file_str.len
+            push ret_val_3_open_file_str
+            push dword [ebp - 172]                      ; std handle
+            call print_string
+
+            call [get_last_error]
+
+            mov dword [ebp - 4], 3
+
+            jmp .shutdown
+
+    .continue_open_file:
+        mov [ebp - 152], eax                            ; file handle
+
+        mov edx, ebp
+        sub edx, 156                                    ; file size high order dword
+        push edx
+
+        push dword [ebp - 152]                          ; file handle
+        call [get_file_size]                            ; file size in eax
+
+        cmp eax, INVALID_FILE_SIZE
+        jne .continue_get_file_size
+            push ret_val_4_get_file_size_str.len
+            push ret_val_4_get_file_size_str
+            push dword [ebp - 172]                      ; std handle
+            call print_string
+
+            call [get_last_error]
+
+            mov dword [ebp - 4], 4                      ; return value
+
+            jmp .shutdown
+
+    .continue_get_file_size:
+        mov [ebp - 160], eax                            ; file size saved
+
+        mov edx, PAGE_READWRITE
+        push edx
+
+        mov edx, MEM_RESERVE
+        or edx, MEM_COMMIT
+        push edx
+
+        push dword [ebp - 160]                          ; file size
+        push 0
+        call [virtual_alloc]
+
+        cmp eax, 0                                      ; if addr is 0
+        jne .continue_virtual_alloc
+            push ret_val_5_virtual_alloc_str.len
+            push ret_val_5_virtual_alloc_str
+            push dword [ebp - 172]                      ; std handle
+            call print_string
         
-        call [get_last_error]
+            call [get_last_error]
 
-        mov dword [ebp - 4], 5                      ; return value
+            mov dword [ebp - 4], 5                      ; return value
 
-        jmp .shutdown
+            jmp .shutdown
 
-.continue_virtual_alloc:
-    mov dword [ebp - 164], eax                      ; alloced mem
+    .continue_virtual_alloc:
+        mov dword [ebp - 164], eax                      ; alloced mem
 
-    push 0
-    push 0
-    push dword [ebp - 160]                          ; file size
-    push dword [ebp - 164]                          ; alloced mem
-    push dword [ebp - 152]                          ; file handle
-    call [read_file]
+        push 0
+        push 0
+        push dword [ebp - 160]                          ; file size
+        push dword [ebp - 164]                          ; alloced mem
+        push dword [ebp - 152]                          ; file handle
+        call [read_file]
 
-    cmp eax, 0                                      ; 1: successful read
-    jne .continue_read_file
-        push ret_val_6_read_file_str.len
-        push ret_val_6_read_file_str
-        push dword [ebp - 172]                      ; std handle
-        call print_string
+        cmp eax, 0                                      ; 1: successful read
+        jne .continue_read_file
+            push ret_val_6_read_file_str.len
+            push ret_val_6_read_file_str
+            push dword [ebp - 172]                      ; std handle
+            call print_string
 
-        call [get_last_error]
+            call [get_last_error]
 
-        mov dword [ebp - 4], 6                      ; return value
+            mov dword [ebp - 4], 6                      ; return value
 
-        jmp .shutdown
+            jmp .shutdown
 
-.continue_read_file:
-    push dword [ebp - 172]                          ; file handle
-    mov edx, [ebp + 12]                             ; argv
-    add edx, 8                                      ; command line Options
-    push edx
-    push dword [ebp - 164]                          ; alloced mem
-    call parse_pe
+    .continue_read_file:
+        push dword [ebp - 172]                          ; file handle
+        mov edx, [ebp + 12]                             ; argv
+        add edx, 8                                      ; command line Options
+        push edx
+        push dword [ebp - 164]                          ; alloced mem
+        call parse_pe
 
-.shutdown:
-    push MEM_RELEASE
-    push 0
-    push dword [ebp - 164]                          ; alloced mem
-    call [virtual_free]
+    .shutdown:
+        push MEM_RELEASE
+        push 0
+        push dword [ebp - 164]                          ; alloced mem
+        call [virtual_free]
 
-    push dword [ebp - 152]                          ; file handle
-    call [close_handle]
+        push dword [ebp - 152]                          ; file handle
+        call [close_handle]
 
-    mov eax, [ebp - 4]                              ; return value
+        mov eax, [ebp - 4]                              ; return value
 
-    leave
-    ret 8
+        leave
+        ret 8
 
 
 section .data
