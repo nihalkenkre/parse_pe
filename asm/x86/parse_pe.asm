@@ -467,14 +467,14 @@ print_section_headers:
 
         ; ebp - 4 = return value
         ; ebp - 8 = current section header addr
-        ; ebp - 12 = current section index reverse
+        ; ebp - 12 = section header index reverse
         sub esp, 12                     ; allocate local variable space
 
         mov dword [ebp - 4], 0          ; return value
         mov ecx, [ebp + 12]             ; section header count
         mov [ebp - 12], ecx             ; section header index reverse
 
-        mov eax, [ebp + 8]              ; section headers
+        mov eax, [ebp + 8]              ; ptr to section headers
         mov [ebp - 8], eax              ; current section header addr
     .loop:
         mov eax, [ebp - 8]              ; current section header addr
@@ -503,7 +503,7 @@ print_section_headers:
         call print_string
 
         add dword [ebp - 8], 40         ; current section header addr
-        dec dword [ebp - 12]            ; current section header index reverse
+        dec dword [ebp - 12]            ; section header index reverse
 
         jnz .loop
 

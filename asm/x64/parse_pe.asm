@@ -667,6 +667,81 @@ print_nt_headers_optional_header:
         leave
         ret
 
+; arg0: ptr to section headers      rcx
+; arg1: section header count        rdx
+; arg2: sprintf buffer              r8
+; arg3: std handle                  r9
+print_section_headers:
+        push rbp
+        mov rbp, rsp
+        
+        mov [rbp + 16], rcx             ; ptr to section headers
+        mov [rbp + 24], rdx             ; section header count
+        mov [rbp + 32], r8              ; ptr to sprintf buffer
+        mov [rbp + 40], r9              ; std handle
+
+        ; rbp - 8 = return value
+        ; rbp - 16 = current section header addr
+        ; rbp - 24 = section header index reverse
+        ; rbp - 32 = 8 bytes padding
+        sub rsp, 16                     ; allocate local variable space
+        sub rsp, 32                     ; allocate shadow space
+        
+        mov qword [rbp - 8], 0          ; return value
+        mov rcx, [rbp + 24]             ; section header count
+        mov [rbp - 24], rcx             ; section header index reverse 
+
+        mov rax, [rbp + 16]             ; ptr to section headers
+        mov [rbp - 16], rax             ; current section header addr
+
+    .loop:
+        mov rax, [rbp - 16]             ; current section header addr
+
+        sub rsp, 80
+        mov rcx, [rbp + 32]             ; ptr to sprintf buffer
+        mov rdx, section_headers_str
+        mov r8, rax
+        mov r9d, [rax + 8]
+        mov r10d, [rax + 12]
+        mov [rsp + 32], r10
+        mov r10d, [rax + 16]
+        mov [rsp + 40], r10
+        mov r10d, [rax + 20]
+        mov [rsp + 48], r10
+        mov r10d, [rax + 24]
+        mov [rsp + 56], r10
+        mov r10d, [rax + 28]
+        mov [rsp + 64], r10
+        mov r10w, [rax + 32]
+        mov [rsp + 72], r10
+        mov r10w, [rax + 34]
+        mov [rsp + 80], r10
+        mov r10d, [rax + 36]
+        mov [rsp + 88], r10
+        mov r10d, [rax + 40]
+        mov [rsp + 96], r10
+        call sprintf
+        add rsp, 80
+
+        mov rcx, [rbp + 32]             ; ptr to sprintf buffer
+        call strlen
+
+        mov rcx, [rbp + 40]             ; std handle
+        mov rdx, [rbp + 32]             ; ptr to sprintf buffer
+        mov r8, rax                     ; strlen
+        call print_string
+
+        add qword [rbp - 16], 40        ; current section header addr
+        dec qword [rbp - 24]            ; section header index reverse
+
+        jnz .loop
+
+    .shutdown:
+        mov rax, [rbp - 8]              ; return value
+
+        leave
+        ret
+
 ; arg0: base addr file contents     rcx
 ; arg1: Options                     rdx
 ; arg2: std handle                  r8
@@ -842,7 +917,7 @@ parse_pe:
         add rbx, 20                                     ; optional header
         mov [rbp - 32], rbx                             ; optional header saved
 
-        cmp qword [ebp - 72], 5                         ; print nt headers optional header
+        cmp qword [rbp - 72], 5                         ; print nt headers optional header
         jne .continue_from_nt_headers_optional_header_check
 
         ; print nt headers optional header
@@ -879,10 +954,18 @@ parse_pe:
         mov qword [rbp - 56], 0                         ; file bitness saved, 0 for 32 bit
 
     .continue_bit_check:
-        ; loop section headers
+        cmp qword [rbp - 72], 6                         ; print section headers
+        jne .continue_from_section_header_check
+
+        ; print section headers
         mov rcx, [rbp - 48]                             ; section headers
-        mov rdx, [rbp - 40]                             ; section headers count
-        call loop_section_headers
+        mov rdx, [rbp - 40]                             ; section header count
+        mov r8, rbp
+        sub r8, 8264                                    ; sprintf buffer
+        mov r9, [rbp + 32]                              ; std handle
+        call print_section_headers
+
+    .continue_from_section_header_check:
 
     .iat:    
         ; loop IDT
@@ -1362,11 +1445,6 @@ section_headers_str: db '       Section Header', 0xa, \
 STD_HANDLE_ENUM equ -11
 INVALID_HANDLE_VALUE equ -1
 INVALID_FILE_SIZE equ -1
-OF_READ equ 0
-OF_FILE_STRUCT_SIZE equ 144
-DOS_HEADER_BUFFER_SIZE equ 64
-NT_FILE_HEADER_BUFFER_SIZE equ 32   ; 20 + 12 bytes padding to make it divisible by 16
-OPTIONAL_HEADER_BUFFER_SIZE equ 256 ; 224 bytes / 240 bytes is required for 32 bit / 64 bit, padding byte to make it divisible by 16
 
 ; Virtual Alloc
 MEM_COMMIT equ 0x00001000
