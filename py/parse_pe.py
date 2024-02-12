@@ -270,7 +270,7 @@ class NTHeaderOptionalHeader:
             self.base_of_code = int.from_bytes(
                 optional_header_bytes[20:24], 'little')
 
-            # 32 bit exes
+            # 32 bit pe
             if self.magic == int.from_bytes(bytes([11, 1]), 'little'):
                 self.base_of_data = int.from_bytes(
                     optional_header_bytes[24:28], 'little')
@@ -352,7 +352,7 @@ class NTHeaderOptionalHeader:
                 self.reserved = DataDirectory(int.from_bytes(optional_header_bytes[216:220], 'little'), int.from_bytes(
                     optional_header_bytes[220:224], 'little'))
 
-            # 64 bit exes will not have base_of_data_field
+            # 64 bit pe will not have base_of_data_field
             elif self.magic == int.from_bytes(bytes([11, 2]), 'little'):
                 self.base = int.from_bytes(
                     optional_header_bytes[24:32], 'little')
