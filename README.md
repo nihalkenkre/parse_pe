@@ -1,9 +1,10 @@
 # parse_pe
-A Python script to print out different parts of a Portable Executable file, to the console
+A tool to print out different parts of a Portable Executable file, to the console.
+Written in Python, C and ASM.
 
 ```
-positional arguments:
-  filename
+arguments:
+  filepath
 
 options:
   -h, --help            show this help message and exit
