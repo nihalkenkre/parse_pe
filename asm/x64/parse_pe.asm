@@ -1104,7 +1104,7 @@ _parse_pe:
 
         mov rcx, [rbp - 208]                            ; shlwapi addr
         mov rdx, path_file_exists_a_xor
-        call get_proc_address_by_get_proc_addr
+        call [get_proc_address]
 
         cmp rax, 0
         je .shutdown

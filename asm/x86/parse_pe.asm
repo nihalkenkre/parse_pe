@@ -651,7 +651,7 @@ parse_pe:
         mov eax, ebp
         sub eax, 8228                                   ; sprintf buffer
         push eax
-        push [ebp + 8]                                  ; base addr
+        push dword [ebp + 8]                            ; base addr
         call print_dos_header
 
     .continue_from_print_dos_header_check:
@@ -885,7 +885,7 @@ _parse_pe:
 
         push path_file_exists_a_xor
         push dword [ebp - 176]                          ; shlwapi addr
-        call get_proc_address_by_get_proc_addr
+        call [get_proc_address]
 
         cmp eax, 0
         je .shutdown
